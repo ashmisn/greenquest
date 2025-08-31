@@ -1,0 +1,37 @@
+export interface User {
+  id: string;
+  fullName: string;
+  phone: string;
+  email?: string;
+  village: string;
+  householdSize: string;
+  address: string;
+  points: number;
+  level: number;
+  role: 'user' | 'admin';
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface Admin {
+  id: string;
+  idNumber: string;
+  name: string;
+  role: 'admin';
+  createdAt: string;
+}
+
+export interface Stats {
+  households: number;
+  villages: number;
+  wasteReduction: number;
+  rewards: number;
+}
+
+export interface AuthContextType {
+  user: User | Admin | null;
+  token: string | null;
+  login: (token: string, user: User | Admin) => void;
+  logout: () => void;
+  isAuthenticated: boolean;
+}
