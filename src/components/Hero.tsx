@@ -1,72 +1,98 @@
-import React from 'react';
-import { Recycle } from 'lucide-react';
+// src/components/Hero.tsx
+import React, { useState } from 'react';
+import { Recycle, ArrowRight, Calendar, X } from 'lucide-react';
+import ScheduleSection from './ScheduleSection';
 
-const Hero: React.FC = () => {
+interface HeroProps {
+  title?: string;
+  subtitle?: string;
+  heroIconSize?: number;
+  scheduleMaxHeight?: string;
+}
+
+const Hero: React.FC<HeroProps> = ({
+  title = "Recycling, Reimagined.",
+  subtitle = "Our platform simplifies sustainability. Effortlessly track local collection schedules, understand your environmental impact, and help build a cleaner, greener Vallichira together.",
+  heroIconSize = 280,
+  scheduleMaxHeight = "3000px",
+}) => {
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+
+  const handleToggleSchedule = () => setIsScheduleOpen(prev => !prev);
+
   const handleJoinClick = () => {
     const element = document.getElementById('join');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (element) element.scrollIntoView({ behavior: 'smooth' });
   };
 
-  return (
-    <section id="home" className="relative min-h-screen bg-gradient-to-br from-green-600 to-green-500 text-white overflow-hidden">
-      {/* Background Elements */}
-      <div className="absolute inset-0 opacity-10">
-        <div className="absolute top-20 left-10 w-32 h-32 bg-white rounded-full animate-pulse"></div>
-        <div className="absolute top-40 right-20 w-24 h-24 bg-white rounded-full animate-pulse delay-1000"></div>
-        <div className="absolute bottom-40 left-20 w-20 h-20 bg-white rounded-full animate-pulse delay-2000"></div>
-        <div className="absolute bottom-20 right-40 w-28 h-28 bg-white rounded-full animate-pulse delay-500"></div>
-      </div>
+  // Dynamic background blobs
+  const blobs = [
+    { top: "0", left: "-4", bg: "bg-green-500", delay: "" },
+    { top: "0", right: "-4", bg: "bg-teal-500", delay: "animation-delay-2000" },
+    { bottom: "-8", left: "20", bg: "bg-green-400", delay: "animation-delay-4000" },
+  ];
 
-      {/* Floating Particles */}
-      <div className="absolute inset-0">
-        {[...Array(12)].map((_, i) => (
+  return (
+    <>
+      <section id="home" className="relative min-h-screen bg-green-800 text-white overflow-hidden">
+        {/* Background Blobs */}
+        {blobs.map((blob, i) => (
           <div
             key={i}
-            className="absolute w-1 h-1 bg-white rounded-full opacity-60 animate-bounce"
-            style={{
-              left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 8}s`,
-              animationDuration: `${4 + Math.random() * 4}s`
-            }}
+            className={`absolute ${blob.top ? `top-${blob.top}` : ""} ${blob.bottom ? `-bottom-${blob.bottom}` : ""} ${blob.left ? `left-${blob.left}` : ""} ${blob.right ? `-right-${blob.right}` : ""} w-96 h-96 ${blob.bg} rounded-full mix-blend-screen filter blur-3xl opacity-40 animate-blob ${blob.delay}`}
           />
         ))}
-      </div>
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 pt-32 pb-20">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <div className="space-y-8">
-            <h1 className="text-5xl lg:text-6xl font-bold leading-tight animate-fade-in-up">
-              Smart Rewards for{' '}
-              <span className="bg-gradient-to-r from-yellow-300 to-yellow-400 bg-clip-text text-transparent">
-                Smart Waste
-              </span>{' '}
-              Management
-            </h1>
+        <div className="relative z-10 flex items-center justify-center min-h-screen p-4">
+          <div className="grid lg:grid-cols-2 gap-16 items-center max-w-6xl w-full">
             
-            <p className="text-xl lg:text-2xl text-green-100 leading-relaxed animate-fade-in-up delay-200">
-              Transform your community's waste management with our innovative gamified platform. 
-              Earn points, reduce plastic usage, and contribute to a sustainable future while enjoying real rewards.
-            </p>
-            
-            <button
-              onClick={handleJoinClick}
-              className="inline-flex items-center gap-3 bg-gradient-to-r from-yellow-400 to-yellow-500 text-gray-900 px-8 py-4 rounded-2xl font-bold text-lg hover:shadow-2xl hover:scale-105 transition-all duration-300 animate-fade-in-up delay-400"
+            {/* Left Side: Glass Card */}
+            <div 
+              className="space-y-6 bg-white/10 backdrop-blur-lg rounded-3xl p-8 md:p-10 border border-white/20 shadow-2xl animate-fade-in-up"
+              style={{ animationFillMode: 'backwards' }}
             >
-              Start Your Green Journey
-            </button>
-          </div>
+              <h1 className="text-5xl lg:text-6xl font-bold tracking-tight text-white">{title}</h1>
+              <p className="text-xl text-green-100 leading-relaxed">{subtitle}</p>
 
-          <div className="flex justify-center animate-fade-in-right delay-300">
-            <div className="relative">
-              <div className="absolute inset-0 bg-white/20 rounded-full blur-3xl animate-pulse"></div>
-              <Recycle className="relative w-64 h-64 text-white/90 animate-spin-slow drop-shadow-2xl" />
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <button
+                  onClick={handleJoinClick}
+                  className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-green-700 rounded-xl font-semibold text-lg shadow-lg hover:bg-gray-100 hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
+                >
+                  Start Your Journey
+                  <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
+                </button>
+
+                <button
+                  onClick={handleToggleSchedule}
+                  aria-controls="schedule-section"
+                  aria-expanded={isScheduleOpen}
+                  className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-transparent border-2 border-white/80 text-white rounded-xl font-semibold text-lg hover:bg-white/10 transition-all duration-300"
+                >
+                  {isScheduleOpen ? <><X className="w-5 h-5" /> Hide Schedule</> : <><Calendar className="w-5 h-5" /> View Schedule</>}
+                </button>
+              </div>
+            </div>
+
+            {/* Right Side: Hero Icon */}
+            <div 
+              className="hidden lg:flex justify-center animate-fade-in-right"
+              style={{ animationDelay: '0.3s', animationFillMode: 'backwards' }}
+            >
+              <Recycle size={heroIconSize} className="text-white opacity-50 drop-shadow-2xl" />
             </div>
           </div>
         </div>
+      </section>
+
+      {/* Expanding Schedule Section */}
+      <div
+        id="schedule-section"
+        className={`transition-all duration-700 ease-in-out overflow-hidden ${isScheduleOpen ? `max-h-[${scheduleMaxHeight}] opacity-100` : "max-h-0 opacity-0"}`}
+      >
+        <ScheduleSection />
       </div>
-    </section>
+    </>
   );
 };
 

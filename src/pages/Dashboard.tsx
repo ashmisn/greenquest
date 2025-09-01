@@ -1,11 +1,32 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { authAPI } from '../services/api';
 import { Award, TrendingUp, Users, Leaf, Star, Gift, Recycle } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, login, token } = useAuth();
+  const [assignForm, setAssignForm] = useState({ phone: '', wasteType: 'plastic', weight: '' });
+  const [assignStatus, setAssignStatus] = useState<string | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [currentUser, setCurrentUser] = useState(user);
 
-  if (!user) {
+
+  // For user: fetch latest profile on mount or after points assignment
+  useEffect(() => {
+    if (user && user.role === 'user' && token) {
+      setLoadingProfile(true);
+      authAPI.getProfile()
+        .then(profile => {
+          setCurrentUser(profile);
+          login(token, profile); // update context
+        })
+        .finally(() => setLoadingProfile(false));
+    } else {
+      setCurrentUser(user);
+    }
+  }, [user, token]);
+
+  if (!currentUser) {
     return <div>Loading...</div>;
   }
 
@@ -19,11 +40,11 @@ const Dashboard: React.FC = () => {
     </pre>
   );
 
-  const isAdmin = user.role === 'admin';
+  const isAdmin = currentUser.role === 'admin';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-white">
-      {debugUser}
+  {/*debugUser8/}
       {/* Header */}
       <div className="bg-white shadow-lg border-b border-green-100">
         <div className="max-w-6xl mx-auto px-4 py-6 flex justify-between items-center">
@@ -50,7 +71,72 @@ const Dashboard: React.FC = () => {
           // Admin Dashboard
           <div className="space-y-8">
             <h1 className="text-3xl font-bold text-gray-800 mb-8">Admin Dashboard</h1>
-            
+
+            {/* Assign Points Form */}
+            <div className="bg-white p-6 rounded-2xl shadow-lg mb-8 max-w-xl">
+              <h2 className="text-xl font-bold text-green-700 mb-4">Assign Points to User</h2>
+              <form
+                className="space-y-4"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setAssignStatus(null);
+                  try {
+                    const res = await authAPI.assignPoints(assignForm.phone, assignForm.wasteType, Number(assignForm.weight));
+                    setAssignStatus(`Success! ${res.points} points assigned to user.`);
+                    setAssignForm({ phone: '', wasteType: 'plastic', weight: '' });
+                  } catch (err: any) {
+                    setAssignStatus(err.response?.data?.message || 'Error assigning points');
+                  }
+                }}
+              >
+                <div>
+                  <label className="block text-sm font-semibold mb-1">User Phone</label>
+                  <input
+                    type="tel"
+                    required
+                    value={assignForm.phone}
+                    onChange={e => setAssignForm(f => ({ ...f, phone: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="Enter user's phone number"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Waste Type</label>
+                  <select
+                    value={assignForm.wasteType}
+                    onChange={e => setAssignForm(f => ({ ...f, wasteType: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
+                    <option value="plastic">Plastic (10 pts/kg)</option>
+                    <option value="biodegradable">Biodegradable (15 pts/kg)</option>
+                    <option value="e-waste">E-waste (25 pts/kg)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Weight (kg)</label>
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    required
+                    value={assignForm.weight}
+                    onChange={e => setAssignForm(f => ({ ...f, weight: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="Enter weight in kg"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-bold mt-2"
+                >
+                  Assign Points
+                </button>
+                {assignStatus && (
+                  <div className={`mt-2 text-sm font-semibold ${assignStatus.startsWith('Success') ? 'text-green-600' : 'text-red-600'}`}>{assignStatus}</div>
+                )}
+              </form>
+            </div>
+
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white p-6 rounded-2xl shadow-lg border-l-4 border-blue-500">
                 <div className="flex items-center gap-4">
@@ -114,6 +200,7 @@ const Dashboard: React.FC = () => {
         ) : (
           // User Dashboard
           <div className="space-y-8">
+            {loadingProfile && <div className="text-center text-green-600 font-semibold">Refreshing profile...</div>}
             <div className="bg-gradient-to-r from-green-600 to-green-500 p-8 rounded-2xl text-white">
               <h1 className="text-3xl font-bold mb-4">Welcome back, {(user as any).fullName}!</h1>
               <div className="grid md:grid-cols-3 gap-6">

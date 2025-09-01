@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -36,6 +37,10 @@ export const authAPI = {
   
   getStats: async () => {
     const response = await api.get('/stats');
+    return response.data;
+  },
+  assignPoints: async (phone: string, wasteType: string, weight: number) => {
+    const response = await api.post('/assign-points', { phone, wasteType, weight });
     return response.data;
   }
 };

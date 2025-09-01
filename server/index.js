@@ -1,3 +1,4 @@
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -235,6 +236,48 @@ const createDefaultAdmin = async () => {
   }
 };
 
+app.post('/api/assign-points', authenticateToken, async (req, res) => {
+  try {
+    // Only allow admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admin can assign points' });
+    }
+    const { phone, wasteType, weight } = req.body;
+    if (!phone || !wasteType || !weight) {
+      return res.status(400).json({ message: 'phone, wasteType, and weight are required' });
+    }
+    // Points per kg by waste type
+    const pointsTable = {
+      plastic: 10,
+      organic: 15, // Corrected from `biodegradable` to match schema
+      ecofriendly: 25 // Corrected from `e-waste` to match schema
+    };
+    const typeKey = wasteType.toLowerCase();
+    if (!pointsTable[typeKey]) {
+      return res.status(400).json({ message: 'Invalid waste type' });
+    }
+    const points = pointsTable[typeKey] * Number(weight);
+    // Find user
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    // Update user points
+    user.points += points;
+    await user.save();
+    // Add collection record
+    await Collection.create({
+      userId: user._id,
+      wasteType: typeKey,
+      weight,
+      points,
+      collectedBy: req.user.idNumber || req.user.name || 'admin'
+    });
+    res.json({ message: 'Points assigned successfully', points, user });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
