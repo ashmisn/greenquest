@@ -3,6 +3,10 @@ import { UserPlus, CheckCircle } from 'lucide-react';
 import { authAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+console.log("API Base URL:", API_BASE_URL);
+
 const Registration: React.FC = () => {
   const [formData, setFormData] = useState({
     fullName: '',

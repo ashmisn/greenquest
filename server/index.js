@@ -8,22 +8,52 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
 
-// --- Middleware ---
-app.use(cors());
+// Log to confirm the new version is running after deployment
+console.log("SERVER BOOTING UP with diagnostic logging for CORS.");
+
+// ----------------- CORS Setup with Diagnostic Logging -----------------
+const allowedOrigins = [
+  "http://localhost:5173", // local frontend
+  "https://greenquest-backend-9wtb.onrender.com" // deployed frontend
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // --- Start of Diagnostic Logging ---
+    console.log("-----------------------------------------");
+    console.log("CORS MIDDLEWARE TRIGGERED");
+    console.log("Request came from origin:", origin);
+
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      console.log("CORS check PASSED for this origin.");
+      callback(null, true);
+    } else {
+      console.log("CORS check FAILED. Origin not in the allowed list.");
+      callback(new Error('This origin is not allowed by CORS'));
+    }
+    console.log("-----------------------------------------");
+    // --- End of Diagnostic Logging ---
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
+}));
+
+// ----------------- Middleware -----------------
 app.use(express.json());
 
-// --- MongoDB Connection ---
+// ----------------- MongoDB Connection -----------------
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// --- Schemas & Models ---
+// ----------------- Schemas & Models -----------------
 
 // User Schema
 const userSchema = new mongoose.Schema({
   fullName: { type: String, required: true },
-  phone: { type: String, required: true, unique: true }, // primary unique key
-  username: { type: String, required: true }, // mandatory, not unique
+  phone: { type: String, required: true, unique: true },
+  username: { type: String, required: true },
   email: { type: String },
   village: { type: String, required: true },
   householdSize: { type: String, required: true },
@@ -35,7 +65,6 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   createdAt: { type: Date, default: Date.now }
 });
-
 const User = mongoose.model('User', userSchema);
 
 // Admin Schema
@@ -46,7 +75,6 @@ const adminSchema = new mongoose.Schema({
   role: { type: String, default: 'admin' },
   createdAt: { type: Date, default: Date.now }
 });
-
 const Admin = mongoose.model('Admin', adminSchema);
 
 // Collection Schema
@@ -55,13 +83,12 @@ const collectionSchema = new mongoose.Schema({
   wasteType: { type: String, enum: ['plastic', 'organic', 'ecofriendly'], required: true },
   weight: { type: Number, required: true },
   points: { type: Number, required: true },
-  collectedBy: { type: String, required: true }, // admin idNumber
+  collectedBy: { type: String, required: true },
   date: { type: Date, default: Date.now }
 });
-
 const Collection = mongoose.model('Collection', collectionSchema);
 
-// --- Auth Middleware ---
+// ----------------- Auth Middleware -----------------
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -74,7 +101,7 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// --- Routes ---
+// ----------------- Routes -----------------
 
 // Register User
 app.post('/api/register', async (req, res) => {
@@ -88,17 +115,7 @@ app.post('/api/register', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = new User({
-      fullName,
-      phone,
-      username, // mandatory, not unique
-      email,
-      village,
-      householdSize,
-      address,
-      password: hashedPassword
-    });
-
+    const user = new User({ fullName, phone, username, email, village, householdSize, address, password: hashedPassword });
     await user.save();
 
     const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -132,7 +149,6 @@ app.post('/api/login', async (req, res) => {
     if (role === 'admin') {
       account = await Admin.findOne({ idNumber: username });
     } else {
-      // Login using either phone or username
       account = await User.findOne({ $or: [{ phone: username }, { username }] });
     }
 
@@ -152,14 +168,13 @@ app.post('/api/login', async (req, res) => {
       : { id: account._id, fullName: account.fullName, phone: account.phone, username: account.username, village: account.village, points: account.points, level: account.level, role: 'user' };
 
     res.json({ message: 'Login successful', token, user: userData });
-
   } catch (error) {
     console.error("Login Error:", error);
     res.status(500).json({ message: 'Server error during login', error: error.message });
   }
 });
 
-// --- Create Default Admin ---
+// ----------------- Create Default Admin -----------------
 const createDefaultAdmin = async () => {
   try {
     const adminExists = await Admin.findOne({ idNumber: 'admin123' });
@@ -174,7 +189,7 @@ const createDefaultAdmin = async () => {
   }
 };
 
-// --- Start Server ---
+// ----------------- Start Server -----------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
