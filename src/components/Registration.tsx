@@ -37,6 +37,7 @@ const Registration: React.FC = () => {
       setFormData({
         fullName: '',
         phone: '',
+        username: '',
         email: '',
         village: '',
         householdSize: '',
@@ -122,6 +123,22 @@ const Registration: React.FC = () => {
                 />
               </div>
             </div>
+                          <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  username *
+                </label>
+                <input
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none transition-all duration-300 transform focus:scale-105"
+                  placeholder="Enter your username"
+                />
+              </div>
+            
+
 
             <div className="grid md:grid-cols-2 gap-6">
               <div>
