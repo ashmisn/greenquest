@@ -14,7 +14,9 @@ console.log("SERVER BOOTING UP with diagnostic logging for CORS.");
 // ----------------- CORS Setup with Diagnostic Logging -----------------
 const allowedOrigins = [
   "http://localhost:5173", // local frontend
-  "https://greenquest-backend-9wtb.onrender.com" // deployed frontend
+   "https://greenquest-1.onrender.com", // old deployed frontend
+  "https://greenquest-kappa.vercel.app" // NEW Vercel frontend
+// deployed frontend
 ];
 
 app.use(cors({
