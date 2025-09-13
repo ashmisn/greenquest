@@ -11,6 +11,7 @@ const LoginPage: React.FC = () => {
     password: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null); // State for error messages
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -23,15 +24,32 @@ const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('--- Step 1: handleSubmit function triggered. ---'); // DEBUG LOG
+
     setIsLoading(true);
+    setErrorMsg(null); // Clear previous errors
 
     try {
+      console.log('--- Step 2: Calling authAPI.login with:', {
+        username: formData.username,
+        password: formData.password,
+        role: role
+      }); // DEBUG LOG
+      
       const response = await authAPI.login(formData.username, formData.password, role);
+      
+      console.log('--- Step 3: API call successful. Response:', response); // DEBUG LOG
+      
       login(response.token, response.user);
       navigate('/dashboard');
+
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Login failed. Please check your credentials.');
+      const message = error.response?.data?.message || 'Login failed. Please check your credentials.';
+      console.error('--- Step 4 (Error): API call failed. ---', error); // DEBUG LOG
+      setErrorMsg(message); // Set the error message to display to the user
+    
     } finally {
+      console.log('--- Step 5: finally block reached. Setting isLoading to false. ---'); // DEBUG LOG
       setIsLoading(false);
     }
   };
@@ -119,6 +137,13 @@ const LoginPage: React.FC = () => {
                 Forgot Password?
               </a>
             </div>
+
+            {/* Display error message here */}
+            {errorMsg && (
+                <div className="text-red-500 text-sm font-semibold text-center p-2 bg-red-50 rounded-lg">
+                    {errorMsg}
+                </div>
+            )}
 
             <button
               type="submit"
