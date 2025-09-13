@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 
 //const API_BASE_URL = 'http://localhost:5000/api';
@@ -14,7 +13,8 @@ const api = axios.create({
 
 // Add auth token to requests
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('greenquest_token');
+  // Use a more specific key for your token to avoid conflicts
+  const token = localStorage.getItem('greenquest_token'); 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -47,4 +47,49 @@ export const authAPI = {
   }
 };
 
-export default api;
+// V V V V V  ADD THE NEW CODE BLOCK BELOW  V V V V V
+
+export const pickupAPI = {
+  // --- User-facing functions ---
+
+  /**
+   * Schedules a new pickup for the logged-in user.
+   * @param pickupData - The details of the pickup (wasteTypes, quantity, etc.).
+   */
+  schedulePickup: async (pickupData: any) => {
+    // Corresponds to: POST /api/pickups
+    const response = await api.post('/pickups', pickupData);
+    return response.data;
+  },
+
+  /**
+   * Gets the pickup history for the logged-in user.
+   */
+  getUserPickups: async () => {
+    // Corresponds to: GET /api/pickups/my-pickups
+    const response = await api.get('/pickups/my-pickups');
+    return response.data;
+  },
+
+  // --- Admin-facing functions ---
+
+  /**
+   * Gets all pickup requests from all users. (Admin only)
+   */
+  getAllPickups: async () => {
+    // Corresponds to: GET /api/pickups/all
+    const response = await api.get('/pickups/all');
+    return response.data;
+  },
+
+  /**
+   * Updates the status of a specific pickup. (Admin only)
+   * @param pickupId - The ID of the pickup to update.
+   * @param newStatus - The new status (e.g., 'Confirmed', 'Completed').
+   */
+  updatePickupStatus: async (pickupId: string, newStatus: string) => {
+    // Corresponds to: PUT /api/pickups/:id
+    const response = await api.put(`/pickups/${pickupId}`, { status: newStatus });
+    return response.data;
+  }
+};

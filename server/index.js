@@ -175,6 +175,104 @@ app.post('/api/login', async (req, res) => {
     res.status(500).json({ message: 'Server error during login', error: error.message });
   }
 });
+// Add these new routes after your existing /api/login route
+
+
+
+
+
+// Schedule a new pickup (Protected Route)
+app.post('/api/pickups', authenticateToken, async (req, res) => {
+  try {
+    const { wasteTypes, quantity, address, pickupDate, timeSlot } = req.body;
+
+    if (!wasteTypes || !quantity || !address || !pickupDate || !timeSlot) {
+      return res.status(400).json({ message: 'Please provide all required fields for the pickup.' });
+    }
+
+    const pickup = new Pickup({
+      user: req.user.userId, // The userId is added to req.user by your authenticateToken middleware
+      wasteTypes,
+      quantity,
+      address,
+      pickupDate,
+      timeSlot,
+    });
+
+    await pickup.save();
+    res.status(201).json({ message: 'Pickup scheduled successfully!', pickup });
+
+  } catch (error) {
+    console.error("Schedule Pickup Error:", error);
+    res.status(500).json({ message: 'Server error during pickup scheduling', error: error.message });
+  }
+});
+
+// Get all pickups for the logged-in user (Protected Route)
+app.get('/api/pickups/my-pickups', authenticateToken, async (req, res) => {
+  try {
+    // Find all pickups that belong to the user ID from the token
+    const pickups = await Pickup.find({ user: req.user.userId }).sort({ createdAt: -1 });
+    res.json(pickups);
+  } catch (error) {
+    console.error("Get User Pickups Error:", error);
+    res.status(500).json({ message: 'Server error while fetching pickups', error: error.message });
+  }
+});
+
+
+
+
+
+// Add these ADMIN routes after the user pickup routes
+
+// Get ALL pickup requests (Admin Only)
+app.get('/api/pickups/all', [authenticateToken, authorizeAdmin], async (req, res) => {
+  try {
+    // Find all pickups and populate the 'user' field with their name and phone
+    // This way, the admin knows who requested the pickup
+    const allPickups = await Pickup.find({})
+      .populate('user', 'fullName phone') // Fetches user's name and phone
+      .sort({ createdAt: -1 });
+
+    res.json(allPickups);
+  } catch (error) {
+    console.error("Admin Get All Pickups Error:", error);
+    res.status(500).json({ message: 'Server error while fetching all pickups', error: error.message });
+  }
+});
+
+// Update a pickup's status (Admin Only)
+app.put('/api/pickups/:id', [authenticateToken, authorizeAdmin], async (req, res) => {
+  try {
+    const { status } = req.body; // Admin will send the new status (e.g., "Confirmed")
+
+    if (!['Pending', 'Confirmed', 'Completed', 'Cancelled'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status value.' });
+    }
+
+    const pickup = await Pickup.findById(req.params.id);
+
+    if (!pickup) {
+      return res.status(404).json({ message: 'Pickup request not found.' });
+    }
+
+    pickup.status = status;
+    await pickup.save();
+
+    res.json({ message: `Pickup status updated to ${status}`, pickup });
+
+  } catch (error) {
+    console.error("Admin Update Pickup Error:", error);
+    res.status(500).json({ message: 'Server error while updating pickup status', error: error.message });
+  }
+});
+
+
+
+
+
+
 
 // ----------------- Create Default Admin -----------------
 const createDefaultAdmin = async () => {
