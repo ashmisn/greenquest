@@ -203,6 +203,7 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
     }
 });
 
+
 // Get Stats Route
 // Get Stats Route
 // app.get('/api/stats', async (req, res) => {
@@ -255,11 +256,7 @@ app.get('/api/stats', async (req, res) => {
     }
 });
 
-    } catch (error) {
-        console.error("Get Stats Error:", error);
-        res.status(500).json({ message: 'Server error while fetching stats' });
-    }
-});
+ 
 
 // Assign Points Route
 app.post('/api/assign-points', [authenticateToken, authorizeAdmin], async (req, res) => {
@@ -304,6 +301,7 @@ app.post('/api/pickups', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Server error during pickup scheduling', error: error.message });
   }
 });
+
 
 // Get all pickups for the logged-in user (Protected Route)
 app.get('/api/pickups/my-pickups', authenticateToken, async (req, res) => {
