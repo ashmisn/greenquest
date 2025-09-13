@@ -14,7 +14,15 @@ const Impact: React.FC = () => {
     const fetchStats = async () => {
       try {
         const data = await authAPI.getStats();
-        setStats(data);
+        
+        // --- ADDED THIS LOG TO DEBUG ---
+        console.log("Data received from /api/stats:", data); 
+        
+        // Safety check to ensure data is not null/undefined before setting state
+        if (data) {
+          setStats(data);
+        }
+
       } catch (error) {
         console.error('Error fetching stats:', error);
       }
@@ -57,7 +65,8 @@ const Impact: React.FC = () => {
               className="group text-center p-8 bg-white/10 backdrop-blur-md rounded-2xl hover:bg-white/20 transition-all duration-500 transform hover:scale-105"
             >
               <div className="text-5xl lg:text-6xl font-bold text-yellow-400 mb-4 group-hover:scale-110 transition-transform duration-500">
-                {stat.value}
+                {/* Display a dash if the value is 0 or falsy, otherwise display the value */}
+                {stat.value || 0}
                 <span className="text-3xl">{stat.suffix}</span>
               </div>
               <div className="text-lg font-medium text-green-100">

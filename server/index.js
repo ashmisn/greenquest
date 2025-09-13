@@ -204,14 +204,57 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
 });
 
 // Get Stats Route
+// Get Stats Route
+// app.get('/api/stats', async (req, res) => {
+//     try {
+//         const totalUsers = await User.countDocuments();
+        
+//         // --- FIX: Changed the keys to match the front-end Stats interface ---
+//         res.json({
+//             households: totalUsers,
+//             villages: 25,             // placeholder value
+//             wasteReduction: 5820,     // placeholder value
+//             rewards: 320              // Added missing rewards key with a placeholder
+//         });
 app.get('/api/stats', async (req, res) => {
     try {
+        // --- MODIFIED: Added real database calculations for all stats ---
+
+        // 1. Get the total number of registered users (real-time)
         const totalUsers = await User.countDocuments();
+
+        // 2. Get the number of unique villages covered (real-time)
+        const distinctVillages = await User.distinct('village');
+        const villagesImpacted = distinctVillages.length;
+
+        // 3. Calculate total waste reduction and rewards using an aggregation pipeline (real-time)
+        const collectionStats = await Collection.aggregate([
+            {
+                $group: {
+                    _id: null, // Group all documents into one
+                    totalWaste: { $sum: '$weight' }, // Sum up the 'weight' field
+                    totalRewards: { $sum: '$points' } // Sum up the 'points' field
+                }
+            }
+        ]);
+
+        const wasteReducedKg = collectionStats[0]?.totalWaste || 0;
+        const rewardsDistributed = collectionStats[0]?.totalRewards || 0;
+
+        // Send the real data with the correct keys
         res.json({
-            totalUsers: totalUsers,
-            villagesImpacted: 25,
-            wasteReducedKg: 5820
+            households: totalUsers,
+            villages: villagesImpacted,
+            wasteReduction: wasteReducedKg,
+            rewards: rewardsDistributed
         });
+        
+    } catch (error) {
+        console.error("Get Stats Error:", error);
+        res.status(500).json({ message: 'Server error while fetching stats' });
+    }
+});
+
     } catch (error) {
         console.error("Get Stats Error:", error);
         res.status(500).json({ message: 'Server error while fetching stats' });
