@@ -103,15 +103,6 @@ const pickupSchema = new mongoose.Schema({
 }, { timestamps: true });
 const Pickup = mongoose.model('Pickup', pickupSchema);
 
-// --- NEW Reward Schema ---
-const rewardSchema = new mongoose.Schema({
-    title: { type: String, required: true },
-    description: { type: String, required: true },
-    pointsRequired: { type: Number, required: true },
-    type: { type: String, enum: ['Discount', 'Recharge', 'Voucher'], default: 'Voucher' }
-});
-const Reward = mongoose.model('Reward', rewardSchema);
-
 
 // ----------------- Auth Middleware -----------------
 const authenticateToken = (req, res, next) => {
@@ -126,10 +117,13 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// --- THIS IS THE MISSING FUNCTION ---
 const authorizeAdmin = (req, res, next) => {
+  // This function should run AFTER authenticateToken, so req.user will exist
   if (req.user && req.user.role === 'admin') {
-    next();
+    next(); // If the user's role is 'admin', allow the request to continue
   } else {
+    // If the user's role is not admin, block the request
     res.status(403).json({ message: 'Access denied. Admin role required.' });
   }
 };
@@ -137,20 +131,9 @@ const authorizeAdmin = (req, res, next) => {
 
 // ----------------- Routes -----------------
 
-// --- NEW Rewards Route ---
-app.get('/api/rewards', async (req, res) => {
-    try {
-        const rewards = await Reward.find({}).sort({ pointsRequired: 1 });
-        res.json(rewards);
-    } catch (error) {
-        console.error("Get Rewards Error:", error);
-        res.status(500).json({ message: 'Server error while fetching rewards' });
-    }
-});
-
 // Register User
 app.post('/api/register', async (req, res) => {
- try {
+  try {
     const { fullName, phone, username, email, village, householdSize, address, password } = req.body;
     if (!username) return res.status(400).json({ message: 'Username is required' });
     const existingUserPhone = await User.findOne({ phone });
@@ -220,29 +203,51 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
     }
 });
 
+
 // Get Stats Route
+// Get Stats Route
+// app.get('/api/stats', async (req, res) => {
+//     try {
+//         const totalUsers = await User.countDocuments();
+        
+//         // --- FIX: Changed the keys to match the front-end Stats interface ---
+//         res.json({
+//             households: totalUsers,
+//             villages: 25,             // placeholder value
+//             wasteReduction: 5820,     // placeholder value
+//             rewards: 320              // Added missing rewards key with a placeholder
+//         });
 app.get('/api/stats', async (req, res) => {
     try {
+        // --- MODIFIED: Added real database calculations for all stats ---
+
+        // 1. Get the total number of registered users (real-time)
         const totalUsers = await User.countDocuments();
+
+        // 2. Get the number of unique villages covered (real-time)
         const distinctVillages = await User.distinct('village');
         const villagesImpacted = distinctVillages.length;
+
+        // 3. Calculate total waste reduction and rewards using an aggregation pipeline (real-time)
         const collectionStats = await Collection.aggregate([
             {
                 $group: {
-                    _id: null,
-                    totalWaste: { $sum: '$weight' },
-                    totalRewards: { $sum: '$points' }
+                    _id: null, // Group all documents into one
+                    totalWaste: { $sum: '$weight' }, // Sum up the 'weight' field
+                    totalRewards: { $sum: '$points' } // Sum up the 'points' field
                 }
             }
         ]);
+
         const wasteReducedKg = collectionStats[0]?.totalWaste || 0;
         const rewardsDistributed = collectionStats[0]?.totalRewards || 0;
 
+        // Send the real data with the correct keys
         res.json({
             households: totalUsers,
             villages: villagesImpacted,
-            wasteReduction: Math.round(wasteReducedKg),
-            rewards: Math.round(rewardsDistributed)
+            wasteReduction: wasteReducedKg,
+            rewards: rewardsDistributed
         });
         
     } catch (error) {
@@ -250,6 +255,8 @@ app.get('/api/stats', async (req, res) => {
         res.status(500).json({ message: 'Server error while fetching stats' });
     }
 });
+
+ 
 
 // Assign Points Route
 app.post('/api/assign-points', [authenticateToken, authorizeAdmin], async (req, res) => {
@@ -295,6 +302,7 @@ app.post('/api/pickups', authenticateToken, async (req, res) => {
   }
 });
 
+
 // Get all pickups for the logged-in user (Protected Route)
 app.get('/api/pickups/my-pickups', authenticateToken, async (req, res) => {
   try {
@@ -339,7 +347,7 @@ app.put('/api/pickups/:id', [authenticateToken, authorizeAdmin], async (req, res
   }
 });
 
-// ----------------- Create Default Data -----------------
+// ----------------- Create Default Admin -----------------
 const createDefaultAdmin = async () => {
   try {
     const adminExists = await Admin.findOne({ idNumber: 'admin123' });
@@ -354,30 +362,9 @@ const createDefaultAdmin = async () => {
   }
 };
 
-// --- NEW Function to Create Default Rewards ---
-const createDefaultRewards = async () => {
-    try {
-        const count = await Reward.countDocuments();
-        if (count === 0) {
-            const defaultRewards = [
-                { title: '₹25 Mobile Recharge', description: 'Get a recharge voucher for any network.', pointsRequired: 50, type: 'Recharge' },
-                { title: '₹50 Electricity Discount', description: 'Apply this discount to your next electricity bill.', pointsRequired: 100, type: 'Discount' },
-                { title: 'Local Store Voucher', description: 'Get a ₹100 voucher for a participating local store.', pointsRequired: 150, type: 'Voucher' },
-                { title: '1 Month Cable TV', description: 'Enjoy one month of free cable TV subscription.', pointsRequired: 250, type: 'Recharge' },
-            ];
-            await Reward.insertMany(defaultRewards);
-            console.log('Default rewards created.');
-        }
-    } catch (error) {
-        console.error('Error creating default rewards:', error);
-    }
-};
-
-
 // ----------------- Start Server -----------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   createDefaultAdmin();
-  createDefaultRewards(); // Call the new function on server start
 });
