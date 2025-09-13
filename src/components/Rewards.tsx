@@ -1,15 +1,43 @@
-import React from 'react';
-import { Zap, CreditCard, Droplets, ShoppingCart, GraduationCap, Award } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { rewardAPI } from '../services/api'; // We'll use the reward API
+import { Reward } from '../types'; // We'll use the Reward interface
+// Import all necessary icons
+import { Zap, CreditCard, Droplets, ShoppingCart, GraduationCap, Award, Ticket, Receipt, Smartphone, Gift } from 'lucide-react';
 
 const Rewards: React.FC = () => {
-  const rewards = [
-    { icon: Zap, title: 'Electricity Bill Discounts' },
-    { icon: CreditCard, title: 'FASTag Recharges' },
-    { icon: Droplets, title: 'Water Bill Subsidies' },
-    { icon: ShoppingCart, title: 'Local Market Discounts' },
-    { icon: GraduationCap, title: 'Educational Benefits' },
-    { icon: Award, title: 'Community Recognition' }
-  ];
+  // State to hold the rewards fetched from the API
+  const [rewards, setRewards] = useState<Reward[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch rewards from the API when the component mounts
+  useEffect(() => {
+    const fetchRewards = async () => {
+      try {
+        const data = await rewardAPI.getRewards();
+        setRewards(data);
+      } catch (error) {
+        console.error('Error fetching rewards:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRewards();
+  }, []);
+
+  // Helper function to map a reward type string to a Lucide icon component
+  const getRewardIcon = (type: Reward['type']) => {
+    switch (type) {
+        case 'Discount':
+            return <Receipt className="w-12 h-12 text-yellow-500 mx-auto mb-4 group-hover:scale-125 group-hover:drop-shadow-lg transition-all duration-500" />;
+        case 'Recharge':
+            return <Smartphone className="w-12 h-12 text-yellow-500 mx-auto mb-4 group-hover:scale-125 group-hover:drop-shadow-lg transition-all duration-500" />;
+        case 'Voucher':
+            return <Ticket className="w-12 h-12 text-yellow-500 mx-auto mb-4 group-hover:scale-125 group-hover:drop-shadow-lg transition-all duration-500" />;
+        default:
+            return <Gift className="w-12 h-12 text-yellow-500 mx-auto mb-4 group-hover:scale-125 group-hover:drop-shadow-lg transition-all duration-500" />;
+    }
+  };
+
 
   return (
     <section id="rewards" className="py-20 bg-white">
@@ -24,22 +52,27 @@ const Rewards: React.FC = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-          {rewards.map((reward, index) => (
-            <div
-              key={index}
-              className="group bg-white p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-4 border border-yellow-100 relative overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-yellow-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              
-              <div className="relative text-center">
-                <reward.icon className="w-12 h-12 text-yellow-500 mx-auto mb-4 group-hover:scale-125 group-hover:drop-shadow-lg transition-all duration-500" />
-                <h3 className="text-sm font-bold text-gray-800 leading-tight">
-                  {reward.title}
-                </h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {loading ? (
+            <p className="col-span-full text-center text-gray-500">Loading rewards...</p>
+          ) : (
+            rewards.map((reward) => (
+              <div
+                key={reward._id}
+                className="group bg-white p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-4 border border-yellow-100 relative overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-yellow-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                
+                <div className="relative text-center">
+                  {getRewardIcon(reward.type)}
+                  <h3 className="text-sm font-bold text-gray-800 leading-tight">
+                    {reward.title}
+                  </h3>
+                   <p className="text-xs text-yellow-600 font-semibold mt-1">{reward.pointsRequired} points</p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </section>

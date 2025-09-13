@@ -35,3 +35,10 @@ export interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
 }
+export interface Reward {
+  _id: string;
+  title: string;
+  description: string;
+  pointsRequired: number;
+  type: 'Discount' | 'Recharge' | 'Voucher';
+}
