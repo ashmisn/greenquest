@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
+import SchedulePickupPage  from './pages/SchedulePickupPage'; // Import the new page
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -34,6 +35,14 @@ function AppContent() {
             <Dashboard />
           </ProtectedRoute>
         } />
+        
+        {/* --- ADDED THE NEW PROTECTED ROUTE --- */}
+        <Route path="/schedule-pickup" element={
+          <ProtectedRoute>
+            <SchedulePickupPage />
+          </ProtectedRoute>
+        } />
+
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
