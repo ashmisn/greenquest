@@ -46,7 +46,12 @@ export const authAPI = {
     return response.data;
   }
 };
-
+export const rewardAPI = {
+  getRewards: async () => {
+    const response = await api.get('/rewards');
+    return response.data;
+  }
+};
 // V V V V V  ADD THE NEW CODE BLOCK BELOW  V V V V V
 
 export const pickupAPI = {
