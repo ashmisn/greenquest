@@ -6,6 +6,9 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "cors": "^2.8.5"
+    "@sendgrid/mail": "^8.1.5",
+    "cors": "^2.8.5",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1"
   }
 }

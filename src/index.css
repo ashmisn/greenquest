@@ -96,3 +96,42 @@ button, a, input, select {
 ::-webkit-scrollbar-thumb:hover {
   background: #15803d;
 }
+/* ... your existing styles ... */
+
+/* --- STYLES FOR MAZE GAME --- */
+.maze-grid {
+  display: grid;
+  border: 2px solid #34495e;
+  background-color: #ecf0f1;
+}
+
+.maze-cell {
+  width: 50px; /* Adjust size as needed */
+  height: 50px; /* Adjust size as needed */
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.maze-cell.wall {
+  background-color: #2c3e50; /* Dark wall color */
+}
+
+.maze-cell.path {
+  background-color: #ffffff; /* White path color */
+}
+
+.player-icon {
+  color: #3498db; /* Blue bottle color */
+  width: 70%;
+  height: 70%;
+  z-index: 10;
+  transition: all 0.2s ease-in-out;
+}
+
+.goal-icon {
+  color: #2ecc71; /* Green recycle bin color */
+  width: 80%;
+  height: 80%;
+}

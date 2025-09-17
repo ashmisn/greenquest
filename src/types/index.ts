@@ -10,6 +10,7 @@ export interface User {
   level: number;
   role: 'user' | 'admin';
   isActive: boolean;
+  redeemedRewards: string[];
   createdAt: string;
 }
 
@@ -40,5 +41,6 @@ export interface Reward {
   title: string;
   description: string;
   pointsRequired: number;
-  type: 'Discount' | 'Recharge' | 'Voucher';
+  type: 'Discount' | 'Recharge' | 'Voucher' | 'Product'; // Expanded to match server schema
+  requiredLevel: number; // Added to support tier-based rewards
 }

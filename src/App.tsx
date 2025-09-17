@@ -5,6 +5,11 @@ import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import SchedulePickupPage  from './pages/SchedulePickupPage'; // Import the new page
+import GamesPage from './pages/GamesPage';
+import QuizGamePage from './components/QuizGame'; // 1. Import new game pages
+import TrashSortGamePage from './components/TrashSortGame';
+import MazeGamePage from './components/MazeGame';
+
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -42,6 +47,10 @@ function AppContent() {
             <SchedulePickupPage />
           </ProtectedRoute>
         } />
+        <Route path="/games" element={<ProtectedRoute><GamesPage /></ProtectedRoute>} />
+        <Route path="/games/quiz" element={<ProtectedRoute><QuizGamePage /></ProtectedRoute>} />
+        <Route path="/games/sort" element={<ProtectedRoute><TrashSortGamePage /></ProtectedRoute>} />
+        <Route path="/games/maze" element={<ProtectedRoute><MazeGamePage /></ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

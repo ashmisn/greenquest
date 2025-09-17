@@ -1,30 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { rewardAPI } from '../services/api'; // We'll use the reward API
+import React from 'react';
 import { Reward } from '../types'; // We'll use the Reward interface
-// Import all necessary icons
-import { Zap, CreditCard, Droplets, ShoppingCart, GraduationCap, Award, Ticket, Receipt, Smartphone, Gift } from 'lucide-react';
+import { Ticket, Receipt, Smartphone, Gift } from 'lucide-react';
 
-const Rewards: React.FC = () => {
-  // State to hold the rewards fetched from the API
-  const [rewards, setRewards] = useState<Reward[]>([]);
-  const [loading, setLoading] = useState(true);
+// --- NEW: Define props for the component ---
+interface RewardsProps {
+  rewards: Reward[];
+  loading: boolean;
+  title?: string; // Optional title
+}
 
-  // Fetch rewards from the API when the component mounts
-  useEffect(() => {
-    const fetchRewards = async () => {
-      try {
-        const data = await rewardAPI.getRewards();
-        setRewards(data);
-      } catch (error) {
-        console.error('Error fetching rewards:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRewards();
-  }, []);
-
-  // Helper function to map a reward type string to a Lucide icon component
+// --- MODIFIED: The component now accepts props ---
+const Rewards: React.FC<RewardsProps> = ({ rewards, loading, title = "Rewards & Benefits" }) => {
+  
+  // Helper function remains the same
   const getRewardIcon = (type: Reward['type']) => {
     switch (type) {
         case 'Discount':
@@ -38,13 +26,14 @@ const Rewards: React.FC = () => {
     }
   };
 
+  // --- REMOVED: All useState and useEffect hooks for fetching data ---
 
   return (
     <section id="rewards" className="py-20 bg-white">
       <div className="max-w-6xl mx-auto px-4">
         <div className="text-center mb-16">
           <h2 className="text-4xl lg:text-5xl font-bold text-green-600 mb-6">
-            Rewards & Benefits
+            {title}
           </h2>
           <div className="w-16 h-1 bg-gradient-to-r from-yellow-400 to-yellow-500 mx-auto mb-6 rounded-full"></div>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
@@ -55,23 +44,26 @@ const Rewards: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {loading ? (
             <p className="col-span-full text-center text-gray-500">Loading rewards...</p>
-          ) : (
+          ) : rewards.length > 0 ? (
             rewards.map((reward) => (
               <div
                 key={reward._id}
                 className="group bg-white p-6 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-4 border border-yellow-100 relative overflow-hidden"
               >
                 <div className="absolute inset-0 bg-gradient-to-br from-yellow-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                
                 <div className="relative text-center">
                   {getRewardIcon(reward.type)}
                   <h3 className="text-sm font-bold text-gray-800 leading-tight">
                     {reward.title}
                   </h3>
-                   <p className="text-xs text-yellow-600 font-semibold mt-1">{reward.pointsRequired} points</p>
+                  <p className="text-xs text-yellow-600 font-semibold mt-1">{reward.pointsRequired} points</p>
+                   {/* Display the required level */}
+                  <p className="text-xs text-gray-500 font-semibold mt-1">Requires Level {reward.requiredLevel}</p>
                 </div>
               </div>
             ))
+          ) : (
+             <p className="col-span-full text-center text-gray-500">No rewards available at the moment.</p>
           )}
         </div>
       </div>

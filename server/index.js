@@ -5,33 +5,26 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+const sgMail = require('@sendgrid/mail'); // <-- ADD THIS
+sgMail.setApiKey(process.env.SENDGRID_API_KEY); // <-- AND THIS
+
 
 const app = express();
+console.log("SERVER BOOTING UP...");
 
-// Log to confirm the new version is running after deployment
-console.log("SERVER BOOTING UP with diagnostic logging for CORS.");
-
-// ----------------- CORS Setup with Diagnostic Logging -----------------
+// ----------------- CORS Setup -----------------
 const allowedOrigins = [
-  "http://localhost:5173", // local frontend
-  "https://greenquest-1.onrender.com", // old deployed frontend
-  "https://greenquest-kappa.vercel.app" // NEW Vercel frontend
+  "http://localhost:5173",
+  "https://greenquest-1.onrender.com",
+  "https://greenquest-kappa.vercel.app"
 ];
-
 app.use(cors({
   origin: function (origin, callback) {
-    console.log("-----------------------------------------");
-    console.log("CORS MIDDLEWARE TRIGGERED");
-    console.log("Request came from origin:", origin);
-
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      console.log("CORS check PASSED for this origin.");
       callback(null, true);
     } else {
-      console.log("CORS check FAILED. Origin not in the allowed list.");
       callback(new Error('This origin is not allowed by CORS'));
     }
-    console.log("-----------------------------------------");
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -46,9 +39,10 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// ----------------- Schemas & Models -----------------
+// =================================================================
+// ----------------- SCHEMAS & MODELS (All in one place) -----------
+// =================================================================
 
-// User Schema
 const userSchema = new mongoose.Schema({
   fullName: { type: String, required: true },
   phone: { type: String, required: true, unique: true },
@@ -62,11 +56,11 @@ const userSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
   password: { type: String, required: true },
+  redeemedRewards: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Reward' }],
   createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
 
-// Admin Schema
 const adminSchema = new mongoose.Schema({
   idNumber: { type: String, required: true, unique: true },
   password: { type: String, required: true },
@@ -76,10 +70,9 @@ const adminSchema = new mongoose.Schema({
 });
 const Admin = mongoose.model('Admin', adminSchema);
 
-// Collection Schema
 const collectionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  wasteType: { type: String, enum: ['plastic', 'organic', 'ecofriendly'], required: true },
+  wasteType: { type: String, enum: ['plastic', 'organic', 'e-waste', 'biodegradable'], required: true },
   weight: { type: Number, required: true },
   points: { type: Number, required: true },
   collectedBy: { type: String, required: true },
@@ -87,7 +80,6 @@ const collectionSchema = new mongoose.Schema({
 });
 const Collection = mongoose.model('Collection', collectionSchema);
 
-// Pickup Schema
 const pickupSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     wasteTypes: { type: [String], required: true },
@@ -103,8 +95,43 @@ const pickupSchema = new mongoose.Schema({
 }, { timestamps: true });
 const Pickup = mongoose.model('Pickup', pickupSchema);
 
+const rewardSchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    description: { type: String, required: true },
+    pointsRequired: { type: Number, required: true },
+    type: {
+        type: String,
+        enum: ['Discount', 'Voucher', 'Recharge', 'Product'],
+        required: true,
+    },
+    requiredLevel: { type: Number, default: 1 },
+    isActive: { type: Boolean, default: true },
+}, { timestamps: true });
+const Reward = mongoose.model('Reward', rewardSchema);
 
-// ----------------- Auth Middleware -----------------
+const redemptionSchema = new mongoose.Schema({
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    reward: { type: mongoose.Schema.Types.ObjectId, ref: 'Reward', required: true },
+    pointsSpent: { type: Number, required: true },
+}, { timestamps: true });
+const Redemption = mongoose.model('Redemption', redemptionSchema);
+
+// ... after the Redemption schema
+
+const notificationSchema = new mongoose.Schema({
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    message: { type: String, required: true },
+    isRead: { type: Boolean, default: false },
+    link: { type: String } // Optional: for clickable notifications
+}, { timestamps: true });
+const Notification = mongoose.model('Notification', notificationSchema);
+
+// ... rest of the file
+
+// =================================================================
+// ----------------- AUTH MIDDLEWARE (All in one place) ------------
+// =================================================================
+
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -117,21 +144,20 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// --- THIS IS THE MISSING FUNCTION ---
 const authorizeAdmin = (req, res, next) => {
-  // This function should run AFTER authenticateToken, so req.user will exist
   if (req.user && req.user.role === 'admin') {
-    next(); // If the user's role is 'admin', allow the request to continue
+    next();
   } else {
-    // If the user's role is not admin, block the request
     res.status(403).json({ message: 'Access denied. Admin role required.' });
   }
 };
 
 
-// ----------------- Routes -----------------
+// =================================================================
+// ----------------- API ROUTES (All in one place) -----------------
+// =================================================================
 
-// Register User
+// --- Auth Routes ---
 app.post('/api/register', async (req, res) => {
   try {
     const { fullName, phone, username, email, village, householdSize, address, password } = req.body;
@@ -145,33 +171,19 @@ app.post('/api/register', async (req, res) => {
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        phone: user.phone,
-        username: user.username,
-        village: user.village,
-        points: user.points,
-        level: user.level,
-        role: user.role
-      }
+      user: { id: user._id, fullName: user.fullName, phone: user.phone, username: user.username, village: user.village, points: user.points, level: user.level, role: user.role }
     });
   } catch (error) {
-    console.error("Registration Error:", error);
     res.status(500).json({ message: 'Server error during registration', error: error.message });
   }
 });
 
-// Login User/Admin
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password, role } = req.body;
-    let account;
-    if (role === 'admin') {
-      account = await Admin.findOne({ idNumber: username });
-    } else {
-      account = await User.findOne({ $or: [{ phone: username }, { username }] });
-    }
+    let account = role === 'admin'
+      ? await Admin.findOne({ idNumber: username })
+      : await User.findOne({ $or: [{ phone: username }, { username }] });
     if (!account) return res.status(401).json({ message: 'Invalid credentials' });
     const isValid = await bcrypt.compare(password, account.password);
     if (!isValid) return res.status(401).json({ message: 'Invalid credentials' });
@@ -184,170 +196,315 @@ app.post('/api/login', async (req, res) => {
       : { id: account._id, fullName: account.fullName, phone: account.phone, username: account.username, village: account.village, points: account.points, level: account.level, role: 'user' };
     res.json({ message: 'Login successful', token, user: userData });
   } catch (error) {
-    console.error("Login Error:", error);
     res.status(500).json({ message: 'Server error during login', error: error.message });
   }
 });
 
-// Get Profile Route
+// --- User & Stats Routes ---
 app.get('/api/profile', authenticateToken, async (req, res) => {
     try {
         const user = await User.findById(req.user.userId).select('-password');
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
+        if (!user) return res.status(404).json({ message: 'User not found' });
         res.json(user);
     } catch (error) {
-        console.error("Get Profile Error:", error);
         res.status(500).json({ message: 'Server error while fetching profile' });
     }
 });
 
-
-// Get Stats Route
-// Get Stats Route
-// app.get('/api/stats', async (req, res) => {
-//     try {
-//         const totalUsers = await User.countDocuments();
-        
-//         // --- FIX: Changed the keys to match the front-end Stats interface ---
-//         res.json({
-//             households: totalUsers,
-//             villages: 25,             // placeholder value
-//             wasteReduction: 5820,     // placeholder value
-//             rewards: 320              // Added missing rewards key with a placeholder
-//         });
 app.get('/api/stats', async (req, res) => {
     try {
-        // --- MODIFIED: Added real database calculations for all stats ---
-
-        // 1. Get the total number of registered users (real-time)
         const totalUsers = await User.countDocuments();
-
-        // 2. Get the number of unique villages covered (real-time)
         const distinctVillages = await User.distinct('village');
         const villagesImpacted = distinctVillages.length;
-
-        // 3. Calculate total waste reduction and rewards using an aggregation pipeline (real-time)
         const collectionStats = await Collection.aggregate([
-            {
-                $group: {
-                    _id: null, // Group all documents into one
-                    totalWaste: { $sum: '$weight' }, // Sum up the 'weight' field
-                    totalRewards: { $sum: '$points' } // Sum up the 'points' field
-                }
-            }
+            { $group: { _id: null, totalWaste: { $sum: '$weight' }, totalRewards: { $sum: '$points' } } }
         ]);
-
         const wasteReducedKg = collectionStats[0]?.totalWaste || 0;
         const rewardsDistributed = collectionStats[0]?.totalRewards || 0;
-
-        // Send the real data with the correct keys
-        res.json({
-            households: totalUsers,
-            villages: villagesImpacted,
-            wasteReduction: wasteReducedKg,
-            rewards: rewardsDistributed
-        });
-        
+        res.json({ households: totalUsers, villages: villagesImpacted, wasteReduction: wasteReducedKg, rewards: rewardsDistributed });
     } catch (error) {
-        console.error("Get Stats Error:", error);
         res.status(500).json({ message: 'Server error while fetching stats' });
     }
 });
 
- 
-
-// Assign Points Route
-app.post('/api/assign-points', [authenticateToken, authorizeAdmin], async (req, res) => {
-    try {
-        const { phone, wasteType, weight } = req.body;
-        const user = await User.findOne({ phone });
-        if (!user) {
-            return res.status(404).json({ message: 'User with that phone number not found.' });
-        }
-        let pointsPerKg = 10;
-        if (wasteType === 'biodegradable') pointsPerKg = 15;
-        if (wasteType === 'e-waste') pointsPerKg = 25;
-        const pointsEarned = Math.round(weight * pointsPerKg);
-        user.points += pointsEarned;
-        await user.save();
-        res.json({ message: 'Points assigned successfully', points: pointsEarned, user });
-    } catch (error) {
-        console.error("Assign Points Error:", error);
-        res.status(500).json({ message: 'Server error while assigning points' });
-    }
-});
-
-// Schedule a new pickup (Protected Route)
+// --- Pickup Routes ---
 app.post('/api/pickups', authenticateToken, async (req, res) => {
   try {
     const { wasteTypes, quantity, address, pickupDate, timeSlot } = req.body;
-    if (!wasteTypes || !quantity || !address || !pickupDate || !timeSlot) {
-      return res.status(400).json({ message: 'Please provide all required fields for the pickup.' });
-    }
-    const pickup = new Pickup({
-      user: req.user.userId,
-      wasteTypes,
-      quantity,
-      address,
-      pickupDate,
-      timeSlot,
-    });
+    const pickup = new Pickup({ user: req.user.userId, wasteTypes, quantity, address, pickupDate, timeSlot });
     await pickup.save();
     res.status(201).json({ message: 'Pickup scheduled successfully!', pickup });
   } catch (error) {
-    console.error("Schedule Pickup Error:", error);
     res.status(500).json({ message: 'Server error during pickup scheduling', error: error.message });
   }
 });
+// ... after the GET /api/leaderboard route
+
+// --- NOTIFICATION ROUTES ---
+
+// GET all notifications for the logged-in user
+// ... after the GET /api/leaderboard route
+
+// --- NOTIFICATION ROUTES ---
+
+// GET all notifications for the logged-in user
 
 
-// Get all pickups for the logged-in user (Protected Route)
+
+// --- Admin Routes ---
+// ... rest of your file
 app.get('/api/pickups/my-pickups', authenticateToken, async (req, res) => {
   try {
     const pickups = await Pickup.find({ user: req.user.userId }).sort({ createdAt: -1 });
     res.json(pickups);
   } catch (error) {
-    console.error("Get User Pickups Error:", error);
-    res.status(500).json({ message: 'Server error while fetching pickups', error: error.message });
+    res.status(500).json({ message: 'Server error while fetching pickups' });
   }
 });
 
-// Get ALL pickup requests (Admin Only)
+// --- Reward & Leaderboard Routes ---
+app.get('/api/rewards', async (req, res) => {
+  try {
+    const rewards = await Reward.find({ isActive: true }).sort({ pointsRequired: 1 });
+    res.json(rewards);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error fetching rewards' });
+  }
+});
+
+// ... find your redeem route and replace it with this
+
+// POST to redeem a reward (User only)
+// ... find this route and replace it completely
+
+// POST to redeem a reward (User only)
+app.post('/api/rewards/redeem', authenticateToken, async (req, res) => {
+  try {
+    const { rewardId } = req.body;
+    const user = await User.findById(req.user.userId);
+    const reward = await Reward.findById(rewardId);
+
+    if (!reward) {
+      return res.status(404).json({ message: 'Reward not found.' });
+    }
+    if (user.redeemedRewards && user.redeemedRewards.includes(rewardId)) {
+        return res.status(400).json({ message: 'You have already redeemed this reward.' });
+    }
+    if (user.points < reward.pointsRequired) {
+      return res.status(400).json({ message: 'Insufficient points.' });
+    }
+
+    // --- Database updates (existing logic) ---
+    user.points -= reward.pointsRequired;
+    user.redeemedRewards.push(rewardId);
+    await user.save();
+    
+    const redemption = new Redemption({
+      user: user._id,
+      reward: reward._id,
+      pointsSpent: reward.pointsRequired
+    });
+    await redemption.save();
+
+    // --- V V V NEW EMAIL-SENDING LOGIC V V V ---
+    if (user.email) {
+        const emailMessage = {
+            to: user.email,
+            from: process.env.SENDER_EMAIL_ADDRESS,
+            subject: 'Your GreenQuest Reward Redemption',
+            html: `
+                <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                    <h2>Congratulations, ${user.fullName}!</h2>
+                    <p>You have successfully redeemed a reward on GreenQuest.</p>
+                    <hr>
+                    <h3>Reward Details:</h3>
+                    <p><strong>Reward:</strong> ${reward.title}</p>
+                    <p><strong>Description:</strong> ${reward.description}</p>
+                    <p><strong>Points Spent:</strong> ${reward.pointsRequired}</p>
+                    <hr>
+                    <p>Your new point balance is: <strong>${user.points}</strong>.</p>
+                    <p>Thank you for helping keep our community green!</p>
+                    <br/>
+                    <p><em>- The GreenQuest Team</em></p>
+                </div>
+            `,
+        };
+
+        // Send the email in the background
+        sgMail.send(emailMessage)
+            .then(() => console.log(`Redemption email sent to ${user.email}`))
+            .catch(error => console.error('Error sending redemption email:', error.response.body));
+    }
+    // --- ^ ^ ^ END OF EMAIL LOGIC ^ ^ ^ ---
+
+    res.json({
+      message: `Successfully redeemed '${reward.title}'!`,
+      updatedPoints: user.points
+    });
+
+  } catch (error) {
+    console.error("Redeem Reward Error:", error);
+    res.status(500).json({ message: 'Server error while redeeming reward' });
+  }
+});
+
+app.get('/api/leaderboard', async (req, res) => {
+    try {
+        const topUsers = await User.find({ role: 'user' })
+            .sort({ points: -1 })
+            .limit(10)
+            .select('fullName village points level');
+        res.json(topUsers);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error fetching leaderboard' });
+    }
+});
+// ... after the GET /api/leaderboard route
+
+// --- NOTIFICATION ROUTES ---
+
+// GET all notifications for the logged-in user
+// ... after the GET /api/leaderboard route
+
+// --- NOTIFICATION ROUTES ---
+
+// GET all notifications for the logged-in user
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+    try {
+        const notifications = await Notification.find({ user: req.user.userId })
+            .sort({ createdAt: -1 }) // Show newest first
+            .limit(20); 
+        res.json(notifications);
+    } catch (error) {
+        console.error("Error fetching notifications:", error);
+        res.status(500).json({ message: 'Server error fetching notifications' });
+    }
+});
+
+// POST to mark all notifications as read
+app.post('/api/notifications/mark-read', authenticateToken, async (req, res) => {
+    try {
+        await Notification.updateMany(
+            { user: req.user.userId, isRead: false },
+            { $set: { isRead: true } }
+        );
+        res.status(200).json({ message: 'Notifications marked as read.' });
+    } catch (error) {
+        console.error("Error marking notifications:", error);
+        res.status(500).json({ message: 'Server error marking notifications as read' });
+    }
+});
+
+
+// --- Admin Routes ---
+// ... rest of your file
+
+
+// --- Admin Routes ---
+// ... rest of your file
+
+// --- Admin Routes ---
+// ... in your server file, find the 'assign-points' route and replace it
+
+// Assign Points Route (with Dynamic Bonus Logic)
+app.post('/api/assign-points', [authenticateToken, authorizeAdmin], async (req, res) => {
+    try {
+        const { phone, wasteType, weight } = req.body;
+        const user = await User.findOne({ phone });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        // --- DYNAMIC POINT LOGIC STARTS HERE ---
+        let pointsPerKg = 10; // Base points for plastic
+        let bonusMultiplier = 1.0; // Default: no bonus
+        let bonusMessage = '';
+
+        if (wasteType === 'plastic') {
+            const thirtyDaysAgo = new Date(new Date().setDate(new Date().getDate() - 30));
+            const fifteenDaysAgo = new Date(new Date().setDate(new Date().getDate() - 15));
+
+            // Get collections from the last 30 days for this user
+            const recentCollections = await Collection.find({
+                userId: user._id,
+                wasteType: 'plastic',
+                date: { $gte: thirtyDaysAgo }
+            });
+
+            // Calculate weight from first half vs second half
+            const firstHalfWeight = recentCollections
+                .filter(c => c.date < fifteenDaysAgo)
+                .reduce((sum, c) => sum + c.weight, 0);
+
+            const secondHalfWeight = recentCollections
+                .filter(c => c.date >= fifteenDaysAgo)
+                .reduce((sum, c) => sum + c.weight, 0);
+
+            // If they have history and have reduced waste, give a 20% bonus
+            if (firstHalfWeight > 0 && secondHalfWeight < firstHalfWeight) {
+                bonusMultiplier = 1.2; // 20% bonus
+                bonusMessage = ' Great job reducing plastic waste! You earned a 20% bonus.';
+            }
+        }
+        // --- DYNAMIC POINT LOGIC ENDS HERE ---
+
+        else if (wasteType === 'biodegradable') pointsPerKg = 15;
+        else if (wasteType === 'e-waste') pointsPerKg = 25;
+
+        // Calculate points with the bonus
+        const basePoints = weight * pointsPerKg;
+        const pointsEarned = Math.round(basePoints * bonusMultiplier);
+
+        user.points += pointsEarned;
+        
+        // Also add this collection to the history for future calculations
+        const newCollection = new Collection({
+            userId: user._id,
+            wasteType,
+            weight,
+            points: pointsEarned,
+            collectedBy: req.user.idNumber || 'admin' // Assumes admin ID is in token
+        });
+        
+        await Promise.all([user.save(), newCollection.save()]);
+
+        res.json({ 
+            message: `Points assigned successfully.${bonusMessage}`, 
+            points: pointsEarned, 
+            user 
+        });
+    } catch (error) {
+        console.error("Assign Points Error:", error);
+        res.status(500).json({ message: 'Server error while assigning points' });
+    }
+});
 app.get('/api/pickups/all', [authenticateToken, authorizeAdmin], async (req, res) => {
   try {
-    const allPickups = await Pickup.find({})
-      .populate('user', 'fullName phone')
-      .sort({ createdAt: -1 });
+    const allPickups = await Pickup.find({}).populate('user', 'fullName phone').sort({ createdAt: -1 });
     res.json(allPickups);
   } catch (error) {
-    console.error("Admin Get All Pickups Error:", error);
-    res.status(500).json({ message: 'Server error while fetching all pickups', error: error.message });
+    res.status(500).json({ message: 'Server error while fetching all pickups' });
   }
 });
 
-// Update a pickup's status (Admin Only)
 app.put('/api/pickups/:id', [authenticateToken, authorizeAdmin], async (req, res) => {
   try {
     const { status } = req.body;
     if (!['Pending', 'Confirmed', 'Completed', 'Cancelled'].includes(status)) {
       return res.status(400).json({ message: 'Invalid status value.' });
     }
-    const pickup = await Pickup.findById(req.params.id);
-    if (!pickup) {
-      return res.status(404).json({ message: 'Pickup request not found.' });
-    }
-    pickup.status = status;
-    await pickup.save();
+    const pickup = await Pickup.findByIdAndUpdate(req.params.id, { status }, { new: true });
+    if (!pickup) return res.status(404).json({ message: 'Pickup request not found.' });
     res.json({ message: `Pickup status updated to ${status}`, pickup });
   } catch (error) {
-    console.error("Admin Update Pickup Error:", error);
-    res.status(500).json({ message: 'Server error while updating pickup status', error: error.message });
+    res.status(500).json({ message: 'Server error while updating pickup status' });
   }
 });
 
-// ----------------- Create Default Admin -----------------
+// =================================================================
+// ----------------- SERVER INITIALIZATION -------------------------
+// =================================================================
+
 const createDefaultAdmin = async () => {
   try {
     const adminExists = await Admin.findOne({ idNumber: 'admin123' });
@@ -362,7 +519,6 @@ const createDefaultAdmin = async () => {
   }
 };
 
-// ----------------- Start Server -----------------
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
