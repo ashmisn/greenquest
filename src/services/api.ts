@@ -38,8 +38,13 @@ export const authAPI = {
   assignPoints: async (phone: string, wasteType: string, weight: number) => {
     const response = await api.post('/assign-points', { phone, wasteType, weight });
     return response.data;
+  },
+    addGamePoints: async (pointsToAdd: number, gameName: string) => {
+    const response = await api.post('users/add-game-points', { pointsToAdd, gameName });
+    return response.data;
   }
 };
+
 
 // --- THIS IS THE CORRECT, UNCOMMENTED REWARDAPI OBJECT ---
 export const rewardAPI = {
@@ -91,3 +96,4 @@ export const notificationAPI = {
     return response.data;
   }
 };
+ 
