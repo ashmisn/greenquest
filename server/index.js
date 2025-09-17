@@ -403,10 +403,85 @@ app.post('/api/assign-points', [authenticateToken, authorizeAdmin], async (req, 
     }
 });
 
-app.get('/api/pickups/all', [authenticateToken, authorizeAdmin], async (req, res) => { /* ...get all pickups logic... */ });
-app.put('/api/pickups/:id', [authenticateToken, authorizeAdmin], async (req, res) => { /* ...update pickup logic... */ });
+app.get('/api/pickups/all', [authenticateToken, authorizeAdmin], async (req, res) => {
+  try {
+    const allPickups = await Pickup.find({})
+      .populate('user', 'fullName phone') // Attaches the user's name and phone
+      .sort({ createdAt: -1 });           // Shows the newest requests first
+    
+    res.json(allPickups);
+  } catch (error) {
+    console.error("Admin: Error fetching all pickups:", error);
+    res.status(500).json({ message: 'Server error while fetching all pickups' });
+  }
+});
+app.put('/api/pickups/:id', [authenticateToken, authorizeAdmin], async (req, res) => {
+  try {
+    const { status } = req.body;
+    const { id } = req.params;
 
+    // Validate the incoming status value
+    const allowedStatuses = ['Pending', 'Confirmed', 'Completed', 'Cancelled'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status value provided.' });
+    }
 
+    // Find the pickup and update its status
+    const pickup = await Pickup.findById(id);
+    if (!pickup) {
+      return res.status(404).json({ message: 'Pickup request not found.' });
+    }
+    pickup.status = status;
+    await pickup.save();
+
+    // Create an in-app notification for the user
+    const message = `Update: Your pickup scheduled for ${new Date(pickup.pickupDate).toLocaleDateString()} is now marked as "${status}".`;
+    const newNotification = new Notification({
+        user: pickup.user,
+        message: message,
+        link: '/dashboard'
+    });
+    await newNotification.save();
+
+    res.json({ message: `Pickup status successfully updated to ${status}`, pickup });
+  } catch (error) {
+    console.error("Admin: Error updating pickup status:", error);
+    res.status(500).json({ message: 'Server error while updating pickup status' });
+  }
+});app.put('/api/pickups/:id', [authenticateToken, authorizeAdmin], async (req, res) => {
+  try {
+    const { status } = req.body;
+    const { id } = req.params;
+
+    // Validate the incoming status value
+    const allowedStatuses = ['Pending', 'Confirmed', 'Completed', 'Cancelled'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status value provided.' });
+    }
+
+    // Find the pickup and update its status
+    const pickup = await Pickup.findById(id);
+    if (!pickup) {
+      return res.status(404).json({ message: 'Pickup request not found.' });
+    }
+    pickup.status = status;
+    await pickup.save();
+
+    // Create an in-app notification for the user
+    const message = `Update: Your pickup scheduled for ${new Date(pickup.pickupDate).toLocaleDateString()} is now marked as "${status}".`;
+    const newNotification = new Notification({
+        user: pickup.user,
+        message: message,
+        link: '/dashboard'
+    });
+    await newNotification.save();
+
+    res.json({ message: `Pickup status successfully updated to ${status}`, pickup });
+  } catch (error) {
+    console.error("Admin: Error updating pickup status:", error);
+    res.status(500).json({ message: 'Server error while updating pickup status' });
+  }
+});
 // =================================================================
 // ----------------- SERVER INITIALIZATION -------------------------
 // =================================================================
