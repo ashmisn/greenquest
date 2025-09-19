@@ -278,24 +278,55 @@ app.post('/api/rewards/redeem', authenticateToken, async (req, res) => {
     const reward = await Reward.findById(rewardId);
 
     if (!reward) return res.status(404).json({ message: 'Reward not found.' });
-    if (user.redeemedRewards && user.redeemedRewards.includes(rewardId)) return res.status(400).json({ message: 'You have already redeemed this reward.' });
-    if (user.points < reward.pointsRequired) return res.status(400).json({ message: 'Insufficient points.' });
+    if (user.redeemedRewards && user.redeemedRewards.includes(rewardId)) {
+      return res.status(400).json({ message: 'You have already redeemed this reward.' });
+    }
+    if (user.points < reward.pointsRequired) {
+      return res.status(400).json({ message: 'Insufficient points.' });
+    }
 
     user.points -= reward.pointsRequired;
+    if (!user.redeemedRewards) user.redeemedRewards = [];
     user.redeemedRewards.push(rewardId);
-    
-    const redemption = new Redemption({ user: user._id, reward: reward._id, pointsSpent: reward.pointsRequired });
-    const notification = new Notification({ user: user._id, message: `Success! You've redeemed "${reward.title}" for ${reward.pointsRequired} points.`, link: '/rewards' });
-    
+
+    const redemption = new Redemption({
+      user: user._id,
+      reward: reward._id,
+      pointsSpent: reward.pointsRequired,
+    });
+
+    const notification = new Notification({
+      user: user._id,
+      message: `Success! You've redeemed "${reward.title}" for ${reward.pointsRequired} points.`,
+      link: '/rewards',
+    });
+
     await Promise.all([user.save(), redemption.save(), notification.save()]);
 
     if (user.email) {
-      const emailMessage = { /* ...your email message object... */ };
-      sgMail.send(emailMessage).catch(error => console.error('Error sending email:', error.response.body));
+      const emailMessage = {
+        to: user.email,
+        from: 'ashmi.sn2004@gmail.com',
+        subject: 'Reward Redemption Successful!',
+        text: `You successfully redeemed "${reward.title}" for ${reward.pointsRequired} points.`,
+        html: `<p>Hi ${user.name || 'User'},</p>
+               <p>Success! You've redeemed <b>${reward.title}</b> for ${reward.pointsRequired} points.</p>
+               <p>Remaining points: ${user.points}</p>`,
+      };
+
+      sgMail
+        .send(emailMessage)
+        .catch((error) =>
+          console.error('Error sending email:', error.response?.body || error.message)
+        );
     }
 
-    res.json({ message: `Successfully redeemed '${reward.title}'!`, updatedPoints: user.points });
+    res.json({
+      message: `Successfully redeemed '${reward.title}'!`,
+      updatedPoints: user.points,
+    });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error while redeeming reward' });
   }
 });
