@@ -9,6 +9,8 @@ import GamesPage from './pages/GamesPage';
 import QuizGamePage from './components/QuizGame'; // 1. Import new game pages
 import TrashSortGamePage from './components/TrashSortGame';
 import MazeGamePage from './components/MazeGame';
+import Marketplace from './pages/Marketplace';   // <-- Import
+import CreateProduct from './pages/CreateProduct';
 
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -51,6 +53,8 @@ function AppContent() {
         <Route path="/games/quiz" element={<ProtectedRoute><QuizGamePage /></ProtectedRoute>} />
         <Route path="/games/sort" element={<ProtectedRoute><TrashSortGamePage /></ProtectedRoute>} />
         <Route path="/games/maze" element={<ProtectedRoute><MazeGamePage /></ProtectedRoute>} />
+        <Route path="/marketplace" element={<Marketplace />} />
+          <Route path="/list-product" element={<CreateProduct />} />
 
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

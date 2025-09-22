@@ -3,22 +3,39 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const path = require('path');
+const path = require('path'); // <-- Declared only ONCE
 const sgMail = require('@sendgrid/mail');
+const multer = require('multer'); // <-- All imports at the top
+
+// 1. Configure environment variables first
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// 2. Initialize Express App
 const app = express();
 console.log("SERVER BOOTING UP...");
 
-// ----------------- CORS Setup -----------------
-const allowedOrigins = [
-  "http://localhost:5173",
-  "https://greenquest-1.onrender.com",
-  "https://greenquest-kappa.vercel.app"
-];
+// 3. Set up API keys and other configurations
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+// 4. Set up Multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/'); // Save files to the 'uploads' folder
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`); // Create a unique filename
+  }
+});
+const upload = multer({ storage: storage });
+
+// 5. Apply ALL Middleware
 app.use(cors({
   origin: function (origin, callback) {
+    const allowedOrigins = [
+      "http://localhost:5173",
+      "https://greenquest-1.onrender.com",
+      "https://greenquest-kappa.vercel.app"
+    ];
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -30,13 +47,15 @@ app.use(cors({
   credentials: true
 }));
 
-// ----------------- Middleware -----------------
-app.use(express.json());
+app.use(express.json()); // Middleware to parse JSON bodies
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Middleware to serve static files
 
-// ----------------- MongoDB Connection -----------------
+// 6. Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
+
+// ... The rest of your file (Schemas, Models, Routes, etc.) goes here ...
 
 // =================================================================
 // ----------------- SCHEMAS & MODELS ------------------------------
@@ -94,6 +113,16 @@ const pickupSchema = new mongoose.Schema({
 }, { timestamps: true });
 const Pickup = mongoose.model('Pickup', pickupSchema);
 
+const productSchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    description: { type: String, required: true },
+    price: { type: Number, required: true },
+    imageUrl: { type: String },
+    seller: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    isSold: { type: Boolean, default: false },
+}, { timestamps: true });
+const Product = mongoose.model('Product', productSchema);
+
 const rewardSchema = new mongoose.Schema({
     title: { type: String, required: true },
     description: { type: String, required: true },
@@ -123,7 +152,6 @@ const notificationSchema = new mongoose.Schema({
 }, { timestamps: true });
 const Notification = mongoose.model('Notification', notificationSchema);
 
-
 // =================================================================
 // ----------------- TIER DEFINITIONS ------------------------------
 // =================================================================
@@ -137,7 +165,6 @@ const tiers = [
     { level: 6, name: 'Terra-Guardian', minPoints: 20000 },
     { level: 7, name: 'Gaia\'s Champion', minPoints: 50000 },
 ];
-
 
 // =================================================================
 // ----------------- AUTH MIDDLEWARE -------------------------------
@@ -162,7 +189,6 @@ const authorizeAdmin = (req, res, next) => {
     res.status(403).json({ message: 'Access denied. Admin role required.' });
   }
 };
-
 
 // =================================================================
 // ----------------- API ROUTES ------------------------------------
@@ -261,6 +287,129 @@ app.get('/api/pickups/my-pickups', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/pickups/my-weights', authenticateToken, async (req, res) => {
+  try {
+    const stats = await Collection.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(req.user.userId) } },
+      {
+        $group: {
+          _id: "$wasteType",
+          totalWeight: { $sum: "$weight" }
+        }
+      }
+    ]);
+    const formatted = stats.reduce((acc, item) => {
+      acc[item._id] = { weight: item.totalWeight };
+      return acc;
+    }, {});
+    res.json(formatted);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error while fetching waste stats' });
+  }
+});
+
+// --- Product Marketplace Routes ---
+// app.post('/api/products', authenticateToken, async (req, res) => {
+//   try {
+//     const { title, description, price } = req.body;
+//     const newProduct = new Product({ title, description, price, seller: req.user.userId });
+//     await newProduct.save();
+//     res.status(201).json({ message: 'Product listed successfully!', product: newProduct });
+//   } catch (error) {
+//     res.status(500).json({ message: 'Server error while listing product.' });
+//   }
+// });
+
+// app.get('/api/products', authenticateToken, async (req, res) => {
+//   try {
+//     const products = await Product.find({ isSold: false }).populate('seller', 'fullName village').sort({ createdAt: -1 });
+//     res.json(products);
+//   } catch (error) {
+//     res.status(500).json({ message: 'Server error while fetching products.' });
+//   }
+// });
+// In server/index.js
+
+// Find this route in your server file
+app.post('/api/products', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    const { title, description, price } = req.body;
+    
+    const newProduct = new Product({
+      title,
+      description,
+      price: Number(price), // <-- FIX: Convert the price string to a Number
+      seller: req.user.userId,
+      imageUrl: req.file ? req.file.path : undefined,
+    });
+    
+    await newProduct.save();
+    res.status(201).json({ message: 'Product listed successfully!', product: newProduct });
+  } catch (error) {
+    // Add a log here to see the validation error on the server
+    console.error("Error creating product:", error); 
+    res.status(500).json({ message: 'Server error while listing product.' });
+  }
+});
+
+app.get('/api/products', authenticateToken, async (req, res) => {
+   try {
+    const products = await Product.find({ isSold: false }).populate('seller', 'fullName village').sort({ createdAt: -1 });
+    res.json(products);
+   } catch (error) {
+    res.status(500).json({ message: 'Server error while fetching products.' });
+   }
+});
+// ... after your app.get('/api/products', ...) route
+
+app.post('/api/products/:id/buy', authenticateToken, async (req, res) => {
+  try {
+    const productId = req.params.id;
+    const buyerId = req.user.userId;
+
+    const product = await Product.findById(productId);
+    const buyer = await User.findById(buyerId);
+
+    // --- Validation Checks ---
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found.' });
+    }
+    if (product.isSold) {
+      return res.status(400).json({ message: 'This product has already been sold.' });
+    }
+    if (product.seller.toString() === buyerId) {
+      return res.status(400).json({ message: 'You cannot buy your own product.' });
+    }
+    if (buyer.points < product.price) {
+      return res.status(400).json({ message: 'You do not have enough points.' });
+    }
+
+    const seller = await User.findById(product.seller);
+
+    // --- Perform the Transaction ---
+    buyer.points -= product.price; // Subtract points from buyer
+    if (seller) {
+      seller.points += product.price; // Add points to seller
+      await seller.save();
+    }
+    product.isSold = true; // Mark product as sold
+    
+    // Create a notification for the seller
+    const notification = new Notification({
+        user: product.seller,
+        message: `Congratulations! Your product "${product.title}" has been sold to ${buyer.fullName}.`,
+        link: '/dashboard'
+    });
+
+    // Save all changes
+    await Promise.all([buyer.save(), product.save(), notification.save()]);
+    
+    res.json({ message: 'Purchase successful!', updatedPoints: buyer.points });
+  } catch (error) {
+    console.error("Purchase Error:", error);
+    res.status(500).json({ message: 'Server error during purchase.' });
+  }
+});
 // --- Reward & Leaderboard Routes ---
 app.get('/api/rewards', async (req, res) => {
   try {
@@ -276,55 +425,20 @@ app.post('/api/rewards/redeem', authenticateToken, async (req, res) => {
     const { rewardId } = req.body;
     const user = await User.findById(req.user.userId);
     const reward = await Reward.findById(rewardId);
-
     if (!reward) return res.status(404).json({ message: 'Reward not found.' });
-    if (user.redeemedRewards && user.redeemedRewards.includes(rewardId)) {
-      return res.status(400).json({ message: 'You have already redeemed this reward.' });
-    }
-    if (user.points < reward.pointsRequired) {
-      return res.status(400).json({ message: 'Insufficient points.' });
-    }
-
+    if (user.redeemedRewards && user.redeemedRewards.includes(rewardId)) return res.status(400).json({ message: 'You have already redeemed this reward.' });
+    if (user.points < reward.pointsRequired) return res.status(400).json({ message: 'Insufficient points.' });
     user.points -= reward.pointsRequired;
     if (!user.redeemedRewards) user.redeemedRewards = [];
     user.redeemedRewards.push(rewardId);
-
-    const redemption = new Redemption({
-      user: user._id,
-      reward: reward._id,
-      pointsSpent: reward.pointsRequired,
-    });
-
-    const notification = new Notification({
-      user: user._id,
-      message: `Success! You've redeemed "${reward.title}" for ${reward.pointsRequired} points.`,
-      link: '/rewards',
-    });
-
+    const redemption = new Redemption({ user: user._id, reward: reward._id, pointsSpent: reward.pointsRequired });
+    const notification = new Notification({ user: user._id, message: `Success! You've redeemed "${reward.title}" for ${reward.pointsRequired} points.`, link: '/rewards' });
     await Promise.all([user.save(), redemption.save(), notification.save()]);
-
     if (user.email) {
-      const emailMessage = {
-        to: user.email,
-        from: 'ashmi.sn2004@gmail.com',
-        subject: 'Reward Redemption Successful!',
-        text: `You successfully redeemed "${reward.title}" for ${reward.pointsRequired} points.`,
-        html: `<p>Hi ${user.name || 'User'},</p>
-               <p>Success! You've redeemed <b>${reward.title}</b> for ${reward.pointsRequired} points.</p>
-               <p>Remaining points: ${user.points}</p>`,
-      };
-
-      sgMail
-        .send(emailMessage)
-        .catch((error) =>
-          console.error('Error sending email:', error.response?.body || error.message)
-        );
+      const emailMessage = { to: user.email, from: 'ashmi.sn2004@gmail.com', subject: 'Reward Redemption Successful!', text: `You successfully redeemed "${reward.title}" for ${reward.pointsRequired} points.` };
+      sgMail.send(emailMessage).catch(error => console.error('Error sending email:', error.response?.body || error.message));
     }
-
-    res.json({
-      message: `Successfully redeemed '${reward.title}'!`,
-      updatedPoints: user.points,
-    });
+    res.json({ message: `Successfully redeemed '${reward.title}'!`, updatedPoints: user.points });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error while redeeming reward' });
@@ -365,22 +479,17 @@ app.post('/api/users/add-game-points', authenticateToken, async (req, res) => {
         const { pointsToAdd, gameName } = req.body;
         const user = await User.findById(req.user.userId);
         if (!user) return res.status(404).json({ message: 'User not found' });
-        
         const pointsBefore = user.points;
         user.points += pointsToAdd;
-
         const tierBefore = tiers.slice().reverse().find(t => pointsBefore >= t.minPoints) || tiers[0];
         const tierAfter = tiers.slice().reverse().find(t => user.points >= t.minPoints) || tiers[0];
-
         const notificationPromises = [];
         if (tierAfter.level > tierBefore.level) {
             const levelUpMessage = `LEVEL UP! You've reached Tier ${tierAfter.level}: ${tierAfter.name}!`;
             notificationPromises.push(new Notification({ user: user._id, message: levelUpMessage, link: '/dashboard' }).save());
         }
-        
         const gameWinMessage = `Congratulations! You earned ${pointsToAdd} bonus points from playing ${gameName}.`;
         notificationPromises.push(new Notification({ user: user._id, message: gameWinMessage, link: '/games' }).save());
-        
         await Promise.all([user.save(), ...notificationPromises]);
         res.json({ message: 'Points added successfully!', user });
     } catch (error) {
@@ -394,7 +503,6 @@ app.post('/api/assign-points', [authenticateToken, authorizeAdmin], async (req, 
         const { phone, wasteType, weight } = req.body;
         const user = await User.findOne({ phone });
         if (!user) return res.status(404).json({ message: 'User not found.' });
-
         const pointsBefore = user.points;
         let pointsPerKg = 10, bonusMultiplier = 1.0, bonusMessage = '';
         if (wasteType === 'plastic') {
@@ -410,10 +518,8 @@ app.post('/api/assign-points', [authenticateToken, authorizeAdmin], async (req, 
         }
         else if (wasteType === 'biodegradable') pointsPerKg = 15;
         else if (wasteType === 'e-waste') pointsPerKg = 25;
-        
         const pointsEarned = Math.round((weight * pointsPerKg) * bonusMultiplier);
         user.points += pointsEarned;
-        
         const notificationPromises = [];
         const tierBefore = tiers.slice().reverse().find(t => pointsBefore >= t.minPoints) || tiers[0];
         const tierAfter = tiers.slice().reverse().find(t => user.points >= t.minPoints) || tiers[0];
@@ -421,12 +527,9 @@ app.post('/api/assign-points', [authenticateToken, authorizeAdmin], async (req, 
             const levelUpMessage = `LEVEL UP! You've reached Tier ${tierAfter.level}: ${tierAfter.name}!`;
             notificationPromises.push(new Notification({ user: user._id, message: levelUpMessage, link: '/dashboard' }).save());
         }
-
         const pointsMessage = `You earned ${pointsEarned} points for your ${wasteType} collection.${bonusMessage}`;
         notificationPromises.push(new Notification({ user: user._id, message: pointsMessage }).save());
-        
         const newCollection = new Collection({ userId: user._id, wasteType, weight, points: pointsEarned, collectedBy: req.user.idNumber || 'admin' });
-        
         await Promise.all([user.save(), newCollection.save(), ...notificationPromises]);
         res.json({ message: `Points assigned successfully.${bonusMessage}`, points: pointsEarned, user });
     } catch (error) {
@@ -436,83 +539,34 @@ app.post('/api/assign-points', [authenticateToken, authorizeAdmin], async (req, 
 
 app.get('/api/pickups/all', [authenticateToken, authorizeAdmin], async (req, res) => {
   try {
-    const allPickups = await Pickup.find({})
-      .populate('user', 'fullName phone') // Attaches the user's name and phone
-      .sort({ createdAt: -1 });           // Shows the newest requests first
-    
+    const allPickups = await Pickup.find({}).populate('user', 'fullName phone').sort({ createdAt: -1 });
     res.json(allPickups);
   } catch (error) {
     console.error("Admin: Error fetching all pickups:", error);
     res.status(500).json({ message: 'Server error while fetching all pickups' });
   }
 });
+
 app.put('/api/pickups/:id', [authenticateToken, authorizeAdmin], async (req, res) => {
   try {
     const { status } = req.body;
     const { id } = req.params;
-
-    // Validate the incoming status value
     const allowedStatuses = ['Pending', 'Confirmed', 'Completed', 'Cancelled'];
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({ message: 'Invalid status value provided.' });
-    }
-
-    // Find the pickup and update its status
+    if (!allowedStatuses.includes(status)) return res.status(400).json({ message: 'Invalid status value provided.' });
     const pickup = await Pickup.findById(id);
-    if (!pickup) {
-      return res.status(404).json({ message: 'Pickup request not found.' });
-    }
+    if (!pickup) return res.status(404).json({ message: 'Pickup request not found.' });
     pickup.status = status;
     await pickup.save();
-
-    // Create an in-app notification for the user
     const message = `Update: Your pickup scheduled for ${new Date(pickup.pickupDate).toLocaleDateString()} is now marked as "${status}".`;
-    const newNotification = new Notification({
-        user: pickup.user,
-        message: message,
-        link: '/dashboard'
-    });
+    const newNotification = new Notification({ user: pickup.user, message: message, link: '/dashboard' });
     await newNotification.save();
-
-    res.json({ message: `Pickup status successfully updated to ${status}`, pickup });
-  } catch (error) {
-    console.error("Admin: Error updating pickup status:", error);
-    res.status(500).json({ message: 'Server error while updating pickup status' });
-  }
-});app.put('/api/pickups/:id', [authenticateToken, authorizeAdmin], async (req, res) => {
-  try {
-    const { status } = req.body;
-    const { id } = req.params;
-
-    // Validate the incoming status value
-    const allowedStatuses = ['Pending', 'Confirmed', 'Completed', 'Cancelled'];
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({ message: 'Invalid status value provided.' });
-    }
-
-    // Find the pickup and update its status
-    const pickup = await Pickup.findById(id);
-    if (!pickup) {
-      return res.status(404).json({ message: 'Pickup request not found.' });
-    }
-    pickup.status = status;
-    await pickup.save();
-
-    // Create an in-app notification for the user
-    const message = `Update: Your pickup scheduled for ${new Date(pickup.pickupDate).toLocaleDateString()} is now marked as "${status}".`;
-    const newNotification = new Notification({
-        user: pickup.user,
-        message: message,
-        link: '/dashboard'
-    });
-    await newNotification.save();
-
     res.json({ message: `Pickup status successfully updated to ${status}`, pickup });
   } catch (error) {
     console.error("Admin: Error updating pickup status:", error);
     res.status(500).json({ message: 'Server error while updating pickup status' });
   }
 });
+
 // =================================================================
 // ----------------- SERVER INITIALIZATION -------------------------
 // =================================================================

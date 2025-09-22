@@ -129,7 +129,12 @@ button, a, input, select {
   z-index: 10;
   transition: all 0.2s ease-in-out;
 }
-
+/* In index.css or App.css */
+.chart-container {
+  position: relative;
+  min-height: 400px;
+  width: 100%;
+}
 .goal-icon {
   color: #2ecc71; /* Green recycle bin color */
   width: 80%;

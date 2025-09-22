@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-//const API_BASE_URL = 'http://localhost:5000/api';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = 'http://localhost:5000/api';
+//const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -52,12 +52,14 @@ export const rewardAPI = {
     const response = await api.get('/rewards');
     return response.data;
   },
-  redeemReward: async (rewardId: string) => {
-    const response = await api.post('/rewards/redeem', { rewardId });
-    return response.data;
-  }
+redeemReward: async (rewardId: string) => {
+  // Log the ID to the browser console
+  console.log('Attempting to redeem reward with ID:', rewardId); 
+  
+  const response = await api.post('/rewards/redeem', { rewardId });
+  return response.data;
+}
 };
-
 export const leaderboardAPI = {
     getLeaderboard: async () => {
         const response = await api.get('/leaderboard');
@@ -72,6 +74,10 @@ export const pickupAPI = {
   },
   getUserPickups: async () => {
     const response = await api.get('/pickups/my-pickups');
+    return response.data;
+  },
+  getWeightPickups: async () => {
+    const response = await api.get('/pickups/my-weights');
     return response.data;
   },
   getAllPickups: async () => {
@@ -97,3 +103,19 @@ export const notificationAPI = {
   }
 };
  
+// ... inside your api.ts file
+
+export const productAPI = {
+  createProduct: async (productData: { title: string; description: string; price: number }) => {
+    const response = await api.post('/products', productData);
+    return response.data;
+  },
+  getAllProducts: async () => {
+    const response = await api.get('/products');
+    return response.data;
+  },
+   buyProduct: async (productId: string) => {
+    const response = await api.post(`/products/${productId}/buy`);
+    return response.data;
+  },
+};

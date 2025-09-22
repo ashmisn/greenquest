@@ -11,7 +11,7 @@ const mazeLayout = [
     [1, 0, 0, 0, 0, 0, 0, 1],
     [1, 1, 1, 1, 1, 1, 0, 'E'],
 ];
-const CELL_SIZE = 60; // Corresponds to the CSS width/height
+const CELL_SIZE = 60;
 const POINTS_PER_WIN = 15;
 
 const MazeGame: React.FC = () => {
@@ -29,6 +29,21 @@ const MazeGame: React.FC = () => {
   const [playerPosition, setPlayerPosition] = useState(findStartPos);
   const [timer, setTimer] = useState(0);
   const [moveCount, setMoveCount] = useState(0);
+  // --- ADDED: State to track if the user can play today ---
+  const [canPlay, setCanPlay] = useState(false);
+  const [message, setMessage] = useState("Guide the bottle to the recycling bin!");
+
+  // --- ADDED: Check localStorage on component mount ---
+  useEffect(() => {
+    const lastPlayedDate = localStorage.getItem('lastMazePlayedDate');
+    const today = new Date().toLocaleDateString();
+    if (lastPlayedDate === today) {
+      setCanPlay(false);
+      setMessage("You've completed the maze today. Come back tomorrow for another challenge!");
+    } else {
+      setCanPlay(true);
+    }
+  }, []);
 
   // --- Game Timer Logic ---
   useEffect(() => {
@@ -79,17 +94,31 @@ const MazeGame: React.FC = () => {
   useEffect(() => {
     if (gameState === 'playing' && mazeLayout[playerPosition.row][playerPosition.col] === 'E') {
       setGameState('won');
+      // --- ADDED: Save the play date upon winning ---
+      const today = new Date().toLocaleDateString();
+      localStorage.setItem('lastMazePlayedDate', today);
+      setCanPlay(false); // Lock the game after winning
       authAPI.addGamePoints(POINTS_PER_WIN, 'Maze Challenge').catch(console.error);
     }
   }, [playerPosition, gameState]);
 
   // --- Game Controls ---
   const startGame = () => {
-    setPlayerPosition(findStartPos());
-    setMoveCount(0);
-    setTimer(0);
-    setGameState('playing');
+    // --- MODIFIED: Only start if the user is allowed to play ---
+    if (canPlay) {
+        setPlayerPosition(findStartPos());
+        setMoveCount(0);
+        setTimer(0);
+        setGameState('playing');
+    }
   };
+  
+  const resetAndLockGame = () => {
+      setGameState('idle');
+      // This will ensure the "come back tomorrow" message shows on the idle screen
+      setCanPlay(false); 
+      setMessage("You've completed the maze today. Come back tomorrow for another challenge!");
+  }
 
   // --- RENDER LOGIC ---
   if (gameState === 'idle') {
@@ -97,9 +126,16 @@ const MazeGame: React.FC = () => {
       <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-2xl mx-auto mt-12 text-center">
         <h2 className="text-3xl font-bold mb-4">Maze Challenge</h2>
         <Recycle size={80} className="mx-auto text-green-500 my-6" />
-        <p className="text-gray-600 mb-8">Use your arrow keys or the on-screen buttons to guide the bottle to the recycling bin!</p>
-        <button onClick={startGame} className='bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-8 rounded-lg text-xl inline-flex items-center gap-2'>
-          <Play /> Start Game
+        <p className="text-gray-600 mb-8">{message}</p>
+        {/* --- MODIFIED: Disable button if canPlay is false --- */}
+        <button 
+          onClick={startGame} 
+          disabled={!canPlay}
+          className={`font-bold py-4 px-8 rounded-lg text-xl inline-flex items-center gap-2 ${
+              canPlay ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-400 text-gray-700 cursor-not-allowed'
+          }`}
+        >
+          <Play /> {canPlay ? 'Start Game' : 'Played Today'}
         </button>
       </div>
     );
@@ -115,13 +151,15 @@ const MazeGame: React.FC = () => {
           <div><p className="font-bold">{moveCount}</p><p className="text-sm text-gray-500">Moves</p></div>
         </div>
         <p className="text-2xl font-bold text-green-600 mb-8">You earned +{POINTS_PER_WIN} Points!</p>
-        <button onClick={startGame} className='bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg'>
-          Play Again
+        {/* --- MODIFIED: This button now takes you back to the locked idle screen --- */}
+        <button onClick={resetAndLockGame} className='bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg'>
+          Finish
         </button>
       </div>
     );
   }
 
+  // --- Active Gameplay Screen (No changes needed here) ---
   return (
     <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-fit mx-auto mt-12 text-center">
       <div className="flex justify-between items-center mb-4 px-2">
