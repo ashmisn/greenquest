@@ -19,14 +19,13 @@ interface Product {
   createdAt: string;
 }
 
-// --- Cleaned-up demo products ---
 const demoProducts: Product[] = [
   {
     _id: 'demo1',
     title: 'Upcycled Denim Tote Bag',
     description: 'A sturdy and stylish tote bag handmade from reclaimed denim jeans.',
     price: 250,
-    imageUrl: 'http://googleusercontent.com/image_collection/image_retrieval/3666536858150025435_0',
+    imageUrl: '/bagtote.jpeg', // <-- CORRECTED PATH
     seller: { _id: 'seller1', fullName: 'EcoCrafter', village: 'Greenwood' },
     createdAt: new Date().toISOString(),
   },
@@ -35,7 +34,7 @@ const demoProducts: Product[] = [
     title: 'Decorative Bottle Vases (Set of 3)',
     description: 'Beautifully painted glass bottles, repurposed as elegant vases for your home.',
     price: 150,
-    imageUrl: 'http://googleusercontent.com/image_collection/image_retrieval/6188315355593607317_0',
+    imageUrl: '/decorative bottle.jpg', // <-- CORRECTED PATH
     seller: { _id: 'seller2', fullName: 'Artful Recycler', village: 'Rivertown' },
     createdAt: new Date().toISOString(),
   },
@@ -44,7 +43,7 @@ const demoProducts: Product[] = [
     title: 'Handmade Wooden Birdhouse',
     description: 'A charming birdhouse built from reclaimed pallet wood. Perfect for any garden.',
     price: 300,
-    imageUrl: 'http://googleusercontent.com/image_collection/image_retrieval/17373640404737184469_0',
+    imageUrl: '/birdhouse.jpeg', // <-- CORRECTED PATH
     seller: { _id: 'seller3', fullName: 'WoodWorks', village: 'Oakhaven' },
     createdAt: new Date().toISOString(),
   }
@@ -71,34 +70,34 @@ const Marketplace: React.FC = () => {
     fetchProducts();
   }, []);
 
-  const handleBuy = async (product: Product) => {
-    if (product._id.startsWith('demo')) {
-      alert("This is a demo item and cannot be purchased.");
-      return;
+// In Marketplace.tsx
+
+const handleBuy = async (product: Product) => {
+  if (!window.confirm(`Are you sure you want to buy "${product.title}" for ${product.price} points?`)) {
+    return;
+  }
+  
+  setBuyingId(product._id); // Set loading state for this specific product
+  
+  try {
+    // 1. Call your backend API
+    const response = await productAPI.buyProduct(product._id);
+    alert(response.message);
+
+    // 2. Update the UI: remove the sold product
+    setProducts(prev => prev.filter(p => p._id !== product._id));
+
+    // 3. Update the user's points in the global context
+    if (user && token) {
+      const updatedUser: User = { ...user, points: response.updatedPoints };
+      login(token, updatedUser);
     }
-
-    if (!window.confirm(`Are you sure you want to buy "${product.title}" for ${product.price} points?`)) {
-      return;
-    }
-
-    setBuyingId(product._id);
-    try {
-      const response = await productAPI.buyProduct(product._id);
-      alert(response.message);
-
-      setProducts(prev => prev.filter(p => p._id !== product._id));
-
-      if (user && token) {
-        const updatedUser: User = { ...user, points: response.updatedPoints };
-        login(token, updatedUser);
-      }
-    } catch (error: any) {
-      alert(`Purchase failed: ${error.response?.data?.message || 'An error occurred.'}`);
-    } finally {
-      setBuyingId(null);
-    }
-  };
-
+  } catch (error: any) {
+    alert(`Purchase failed: ${error.response?.data?.message || 'An error occurred.'}`);
+  } finally {
+    setBuyingId(null); // Reset loading state
+  }
+};
   if (loading) return <div className="text-center p-10">Loading products...</div>;
   if (!loading && products.length === 0) return <div className="text-center p-10">No products available.</div>;
 

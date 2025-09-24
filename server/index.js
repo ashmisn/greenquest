@@ -371,45 +371,38 @@ app.post('/api/products/:id/buy', authenticateToken, async (req, res) => {
     const buyer = await User.findById(buyerId);
 
     // --- Validation Checks ---
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found.' });
-    }
-    if (product.isSold) {
-      return res.status(400).json({ message: 'This product has already been sold.' });
-    }
-    if (product.seller.toString() === buyerId) {
-      return res.status(400).json({ message: 'You cannot buy your own product.' });
-    }
-    if (buyer.points < product.price) {
-      return res.status(400).json({ message: 'You do not have enough points.' });
-    }
+    if (!product) return res.status(404).json({ message: 'Product not found.' });
+    if (product.isSold) return res.status(400).json({ message: 'This product is already sold.' });
+    if (product.seller.toString() === buyerId) return res.status(400).json({ message: 'You cannot buy your own product.' });
+    if (buyer.points < product.price) return res.status(400).json({ message: 'You do not have enough points.' });
 
     const seller = await User.findById(product.seller);
 
     // --- Perform the Transaction ---
-    buyer.points -= product.price; // Subtract points from buyer
+    buyer.points -= product.price;
     if (seller) {
-      seller.points += product.price; // Add points to seller
-      await seller.save();
+      seller.points += product.price;
     }
-    product.isSold = true; // Mark product as sold
+    product.isSold = true;
+
+    // --- Save all changes to the database ---
+    await Promise.all([buyer.save(), seller?.save(), product.save()]);
     
-    // Create a notification for the seller
+    // Create notification for the seller
     const notification = new Notification({
         user: product.seller,
         message: `Congratulations! Your product "${product.title}" has been sold to ${buyer.fullName}.`,
-        link: '/dashboard'
     });
+    await notification.save();
 
-    // Save all changes
-    await Promise.all([buyer.save(), product.save(), notification.save()]);
-    
     res.json({ message: 'Purchase successful!', updatedPoints: buyer.points });
   } catch (error) {
     console.error("Purchase Error:", error);
     res.status(500).json({ message: 'Server error during purchase.' });
   }
 });
+    
+
 // --- Reward & Leaderboard Routes ---
 app.get('/api/rewards', async (req, res) => {
   try {
